@@ -25,58 +25,43 @@ class _GameplayScreenState extends State<GameplayScreen> {
 
   static const _hudFill = Color(0x66000000);
   static const _hudBorder = Color(0x26FFFFFF);
-  static const _defaultCharacter = 'assets/images/male_run.png';
 
-  late final RunnersRushGame _game;
+  late RunnersRushGame _game;
+  Key _gameWidgetKey = UniqueKey();
+  bool _isPaused = false;
 
   @override
   void initState() {
     super.initState();
     SystemChrome.setSystemUIOverlayStyle(_overlayStyle);
-    _game = RunnersRushGame();
+    _createGame();
   }
 
-  String _characterAsset() {
-    final args = ModalRoute.of(context)?.settings.arguments;
-    if (args is String && args.isNotEmpty) return args;
-    return _defaultCharacter;
+  void _createGame() {
+    _game = RunnersRushGame();
+    _gameWidgetKey = UniqueKey();
+    _isPaused = false;
   }
 
   void _onPause() {
-    _game.paused = true;
-    final gameplayContext = context;
-    showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      barrierLabel: 'Paused',
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        return PauseMenu(
-          onResume: () {
-            Navigator.of(dialogContext).pop();
-            _game.paused = false;
-          },
-          onRestart: () {
-            Navigator.of(dialogContext).pop();
-            Navigator.of(gameplayContext).pushReplacementNamed(
-              AppRoutes.gameplay,
-              arguments: _characterAsset(),
-            );
-          },
-          onHome: () {
-            Navigator.of(dialogContext).pop();
-            Navigator.of(gameplayContext).pushReplacementNamed(AppRoutes.home);
-          },
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-          child: child,
-        );
-      },
-    );
+    if (_isPaused) return;
+    _game.pauseEngine();
+    setState(() => _isPaused = true);
+  }
+
+  void _onResume() {
+    setState(() => _isPaused = false);
+    _game.resumeEngine();
+  }
+
+  void _onRestart() {
+    setState(_createGame);
+  }
+
+  void _onHome() {
+    _game.pauseEngine();
+    setState(() => _isPaused = false);
+    Navigator.of(context).pushReplacementNamed(AppRoutes.home);
   }
 
   @override
@@ -89,6 +74,7 @@ class _GameplayScreenState extends State<GameplayScreen> {
           fit: StackFit.expand,
           children: [
             GameWidget<RunnersRushGame>(
+              key: _gameWidgetKey,
               game: _game,
               loadingBuilder: (context) => const ColoredBox(
                 color: RunnersRushGame.placeholderColor,
@@ -118,6 +104,14 @@ class _GameplayScreenState extends State<GameplayScreen> {
                 ),
               ),
             ),
+            if (_isPaused)
+              Positioned.fill(
+                child: PauseMenu(
+                  onResume: _onResume,
+                  onRestart: _onRestart,
+                  onHome: _onHome,
+                ),
+              ),
           ],
         ),
       ),

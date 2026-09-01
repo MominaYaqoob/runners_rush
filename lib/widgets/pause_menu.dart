@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:runners_rush/services/audio_service.dart';
 
 class PauseMenu extends StatelessWidget {
   const PauseMenu({
@@ -93,7 +94,10 @@ class _PauseActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onPressed,
+      onTap: () {
+        AudioService.playButtonTap();
+        onPressed();
+      },
       child: Container(
         width: double.infinity,
         padding: EdgeInsets.symmetric(

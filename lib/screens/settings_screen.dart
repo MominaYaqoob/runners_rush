@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
+import 'package:runners_rush/services/settings_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -28,6 +29,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _soundEffects = true;
   bool _backgroundMusic = true;
   bool _vibration = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final sound = await SettingsService.getSoundEnabled();
+    final music = await SettingsService.getMusicEnabled();
+    final vibration = await SettingsService.getVibrationEnabled();
+    if (!mounted) return;
+    setState(() {
+      _soundEffects = sound;
+      _backgroundMusic = music;
+      _vibration = vibration;
+    });
+  }
 
   void _onBack() {
     final nav = Navigator.of(context);
@@ -97,6 +116,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   value: _soundEffects,
                                   onChanged: (value) {
                                     setState(() => _soundEffects = value);
+                                    SettingsService.setSoundEnabled(value);
                                   },
                                 ),
                                 const SizedBox(height: 10),
@@ -106,6 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   value: _backgroundMusic,
                                   onChanged: (value) {
                                     setState(() => _backgroundMusic = value);
+                                    SettingsService.setMusicEnabled(value);
                                   },
                                 ),
                                 const SizedBox(height: 10),
@@ -115,6 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   value: _vibration,
                                   onChanged: (value) {
                                     setState(() => _vibration = value);
+                                    SettingsService.setVibrationEnabled(value);
                                   },
                                 ),
                                 const SizedBox(height: 10),

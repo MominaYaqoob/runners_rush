@@ -10,6 +10,8 @@ import 'package:runners_rush/screens/scoreboard_screen.dart';
 import 'package:runners_rush/screens/settings_screen.dart';
 import 'package:runners_rush/screens/shop_screen.dart';
 import 'package:runners_rush/screens/splash_screen.dart';
+import 'package:runners_rush/services/audio_service.dart';
+import 'package:runners_rush/services/settings_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +19,8 @@ Future<void> main() async {
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]);
+  await SettingsService.init();
+  await AudioService.init();
   runApp(const RunnersRushApp());
 }
 

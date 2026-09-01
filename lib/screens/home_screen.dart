@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
+import 'package:runners_rush/services/audio_service.dart';
+import 'package:runners_rush/services/character_service.dart';
+import 'package:runners_rush/services/score_service.dart';
+import 'package:runners_rush/services/settings_service.dart';
 
 class _Hud {
   static const fill = Color(0x66000000);
@@ -48,14 +52,32 @@ class _HomeScreenState extends State<HomeScreen> {
   );
 
   static const _maleAsset = 'assets/images/male_run.png';
+  static const _femaleAsset = 'assets/images/female_run.png';
 
   String _selectedCharacter = _maleAsset;
   bool _soundOn = true;
+  int _highScore = 0;
 
   @override
   void initState() {
     super.initState();
     SystemChrome.setSystemUIOverlayStyle(_overlayStyle);
+    _soundOn = SettingsService.soundEffectsEnabled;
+    _loadPersistedState();
+  }
+
+  Future<void> _loadPersistedState() async {
+    final highScore = await ScoreService.getHighScore();
+    await SettingsService.init();
+    await AudioService.init();
+    final character = await CharacterService.getSelectedCharacter();
+    if (!mounted) return;
+    setState(() {
+      _highScore = highScore;
+      _soundOn = SettingsService.soundEffectsEnabled;
+      _selectedCharacter =
+          character == CharacterService.female ? _femaleAsset : _maleAsset;
+    });
   }
 
   Future<void> _openCharacterSelect() async {
@@ -68,6 +90,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (!mounted || picked == null) return;
     setState(() => _selectedCharacter = picked);
+    await CharacterService.setSelectedCharacter(
+      picked == _femaleAsset ? CharacterService.female : CharacterService.male,
+    );
   }
 
   @override
@@ -110,7 +135,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             _SoundToggle(
                               soundOn: _soundOn,
                               onPressed: () {
-                                setState(() => _soundOn = !_soundOn);
+                                final next = !_soundOn;
+                                setState(() => _soundOn = next);
+                                SettingsService.setSoundEnabled(next);
                               },
                             ),
                           ],
@@ -122,6 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             _HighScoreBadge(
+                              highScore: _highScore,
                               onTap: () {
                                 Navigator.pushNamed(
                                   context,
@@ -145,11 +173,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                       );
                                     },
                                     onCharacter: _openCharacterSelect,
-                                    onShop: () {
-                                      Navigator.pushNamed(
+                                    onShop: () async {
+                                      await Navigator.pushNamed(
                                         context,
                                         AppRoutes.shop,
                                       );
+                                      if (!mounted) return;
+                                      final character = await CharacterService
+                                          .getSelectedCharacter();
+                                      if (!mounted) return;
+                                      setState(() {
+                                        _selectedCharacter =
+                                            character == CharacterService.female
+                                                ? _femaleAsset
+                                                : _maleAsset;
+                                      });
                                     },
                                     onSettings: () {
                                       Navigator.pushNamed(
@@ -210,8 +248,12 @@ class _BrandLockup extends StatelessWidget {
 }
 
 class _HighScoreBadge extends StatelessWidget {
-  const _HighScoreBadge({required this.onTap});
+  const _HighScoreBadge({
+    required this.highScore,
+    required this.onTap,
+  });
 
+  final int highScore;
   final VoidCallback onTap;
 
   @override
@@ -231,7 +273,7 @@ class _HighScoreBadge extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              'High Score: 0',
+              'High Score: $highScore',
               style: GoogleFonts.baloo2(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -343,7 +385,10 @@ class _PlayButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onPressed,
+      onTap: () {
+        AudioService.playButtonTap();
+        onPressed();
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
         decoration: BoxDecoration(
@@ -395,7 +440,10 @@ class _HudAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onPressed,
+      onTap: () {
+        AudioService.playButtonTap();
+        onPressed();
+      },
       child: Container(
         width: 70,
         height: 70,

@@ -2,6 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
 import 'package:runners_rush/main.dart';
@@ -13,10 +14,16 @@ import 'package:runners_rush/screens/game_over_screen.dart';
 import 'package:runners_rush/screens/gameplay_screen.dart';
 import 'package:runners_rush/screens/home_screen.dart';
 import 'package:runners_rush/screens/onboarding_screen.dart';
+import 'package:runners_rush/services/settings_service.dart';
 
 void main() {
   setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
+  });
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    SettingsService.resetForTests();
   });
 
   Future<void> setLandscape(WidgetTester tester) async {
@@ -299,6 +306,7 @@ void main() {
     expect(find.text('Select'), findsOneWidget);
 
     await tester.tap(find.text('Select'));
+    await tester.pump();
     await tester.pump();
     expect(find.text('Selected'), findsOneWidget);
 

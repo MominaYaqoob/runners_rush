@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
+import 'package:runners_rush/services/audio_service.dart';
+import 'package:runners_rush/services/score_service.dart';
 
-class GameOverScreen extends StatelessWidget {
+class GameOverScreen extends StatefulWidget {
   const GameOverScreen({
     super.key,
     this.score = 0,
@@ -28,12 +30,53 @@ class GameOverScreen extends StatelessWidget {
   static const _hudBorder = Color(0x26FFFFFF);
 
   @override
-  Widget build(BuildContext context) {
+  State<GameOverScreen> createState() => _GameOverScreenState();
+}
+
+class _GameOverScreenState extends State<GameOverScreen> {
+  late int _best;
+  bool _highScoreLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _best = widget.best;
+    _loadHighScore();
+  }
+
+  Future<void> _loadHighScore() async {
+    final value = await ScoreService.getHighScore();
+    if (!mounted) return;
+    setState(() {
+      _best = value;
+      _highScoreLoaded = true;
+    });
+  }
+
+  ({int score, bool isNewHighScore}) _resolveArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
-    final resolvedScore = args is int ? args : score;
+    if (args is int) {
+      return (score: args, isNewHighScore: widget.isNewHighScore);
+    }
+    if (args is Map) {
+      return (
+        score: (args['score'] as int?) ?? widget.score,
+        isNewHighScore:
+            (args['isNewHighScore'] as bool?) ?? widget.isNewHighScore,
+      );
+    }
+    return (score: widget.score, isNewHighScore: widget.isNewHighScore);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resolved = _resolveArgs();
+    final resolvedScore = resolved.score;
+    final isNewHighScore = resolved.isNewHighScore ||
+        (_highScoreLoaded && resolvedScore > _best);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: _overlayStyle,
+      value: GameOverScreen._overlayStyle,
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Stack(
@@ -76,7 +119,7 @@ class GameOverScreen extends StatelessWidget {
                       flex: 6,
                       child: _ResultsPanel(
                         score: resolvedScore,
-                        best: best,
+                        best: _best,
                         isNewHighScore: isNewHighScore,
                         onRestart: () {
                           Navigator.pushReplacementNamed(
@@ -250,7 +293,10 @@ class _RestartButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onPressed,
+      onTap: () {
+        AudioService.playButtonTap();
+        onPressed();
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
         decoration: BoxDecoration(
@@ -296,7 +342,10 @@ class _HomeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onPressed,
+      onTap: () {
+        AudioService.playButtonTap();
+        onPressed();
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(

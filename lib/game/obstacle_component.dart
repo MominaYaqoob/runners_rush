@@ -1,26 +1,81 @@
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
+import 'package:runners_rush/game/hitbox_debug.dart';
 import 'package:runners_rush/game/player_component.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
 
 /// Scrolling hazard. Ground sprites sit on [PlayerComponent] ground; flying
-/// ones sit at jump height so a leap is needed to clear them.
+/// ones fly straight overhead, facing the runner.
 class ObstacleComponent extends SpriteComponent
     with CollisionCallbacks, HasGameReference<RunnersRushGame> {
   ObstacleComponent({
     required this.spritePath,
     this.flying = false,
+    this.speed = RunnersRushGame.initialSpeed,
   });
 
-  static const speed = 200.0;
-  static const sizeScale = 0.55;
+  static const sizeScale = 0.42;
   static const groundHeightRatio = 0.22 * sizeScale;
   static const bushHeightRatio = 0.24 * sizeScale;
-  static const flyingHeightRatio = 0.10 * sizeScale;
-  static const hitboxScale = 0.75;
+  /// Arrow height vs screen — large enough to read, short enough to jump over.
+  static const flyingHeightRatio = 0.078;
+  /// Gap between standing hitbox top and flying hitbox bottom (run-under).
+  static const flyingRunUnderGapRatio = 0.04;
+  static const flyingSpeedMultiplier = 1.4;
+  static final hitboxScale = Vector2(0.50, 0.50);
+  /// Hitbox center, as a fraction of sprite height above the feet.
+  static const hitboxCenterYFromFeet = 0.40;
+  /// Thin shaft only — feathers, trail particles, and padding stay out of the box.
+  static final flyingHitboxScale = Vector2(0.40, 0.18);
+  static const flyingHitboxCenterYFromFeet = 0.50;
+  /// Centered on the shaft (sprite-local). Flip mirrors it toward the runner.
+  static const flyingHitboxCenterX = 0.04;
+
+  static Vector2 hitboxSizeFor(Vector2 spriteSize, {required bool flying}) {
+    final scale = flying ? flyingHitboxScale : hitboxScale;
+    return Vector2(spriteSize.x * scale.x, spriteSize.y * scale.y);
+  }
+
+  static Vector2 hitboxCenterOffset(Vector2 spriteSize, {required bool flying}) {
+    if (flying) {
+      return Vector2(
+        spriteSize.x * flyingHitboxCenterX,
+        -spriteSize.y * flyingHitboxCenterYFromFeet,
+      );
+    }
+    return Vector2(0, -spriteSize.y * hitboxCenterYFromFeet);
+  }
+
+  /// Sprite bottom Y so a standing runner passes under and a full jump goes over.
+  static double flyingBottomY(double screenHeight, double obstacleHeight) {
+    final playerTop = PlayerComponent.standingHitboxTop(screenHeight);
+    final gap = screenHeight * flyingRunUnderGapRatio;
+    final desiredHitboxBottom = playerTop - gap;
+    final spriteSize = Vector2(obstacleHeight, obstacleHeight);
+    final box = hitboxSizeFor(spriteSize, flying: true);
+    final offset = hitboxCenterOffset(spriteSize, flying: true);
+    return desiredHitboxBottom - offset.y - box.y / 2;
+  }
+
+  static double flyingHitboxTop(double screenHeight, double obstacleHeight) {
+    final bottom = flyingBottomY(screenHeight, obstacleHeight);
+    final spriteSize = Vector2(obstacleHeight, obstacleHeight);
+    final box = hitboxSizeFor(spriteSize, flying: true);
+    final offset = hitboxCenterOffset(spriteSize, flying: true);
+    return bottom + offset.y - box.y / 2;
+  }
+
+  static double flyingHitboxBottom(double screenHeight, double obstacleHeight) {
+    final bottom = flyingBottomY(screenHeight, obstacleHeight);
+    final spriteSize = Vector2(obstacleHeight, obstacleHeight);
+    final box = hitboxSizeFor(spriteSize, flying: true);
+    final offset = hitboxCenterOffset(spriteSize, flying: true);
+    return bottom + offset.y + box.y / 2;
+  }
 
   final String spritePath;
   final bool flying;
+  final double speed;
 
   @override
   Future<void> onLoad() async {
@@ -29,13 +84,17 @@ class ObstacleComponent extends SpriteComponent
     anchor = Anchor.bottomCenter;
     _layout();
     position = Vector2(game.size.x + width / 2, _spawnY);
-    await add(
-      RectangleHitbox.relative(
-        Vector2.all(hitboxScale),
-        parentSize: size,
-        collisionType: CollisionType.passive,
-      ),
+    if (flying) {
+      flipHorizontally();
+    }
+    final box = RectangleHitbox(
+      size: hitboxSizeFor(size, flying: flying),
+      position: hitboxCenterOffset(size, flying: flying),
+      anchor: Anchor.center,
+      collisionType: CollisionType.passive,
     );
+    HitboxDebug.apply(box, HitboxDebug.obstacleColor);
+    await add(box);
   }
 
   @override
@@ -65,7 +124,6 @@ class ObstacleComponent extends SpriteComponent
   double get _spawnY {
     final groundY = game.size.y * (1 - PlayerComponent.groundHeightRatio);
     if (!flying) return groundY;
-    final playerHeight = game.size.y * PlayerComponent.heightRatio;
-    return groundY - playerHeight * 0.58;
+    return flyingBottomY(game.size.y, height);
   }
 }

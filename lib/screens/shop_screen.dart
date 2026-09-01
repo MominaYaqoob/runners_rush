@@ -2,20 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
+import 'package:runners_rush/services/character_service.dart';
+import 'package:runners_rush/services/shop_service.dart';
 
 class _ShopSkin {
   const _ShopSkin({
     required this.id,
     required this.name,
     required this.asset,
-    required this.owned,
     this.price = 0,
   });
 
   final String id;
   final String name;
   final String asset;
-  final bool owned;
   final int price;
 }
 
@@ -41,20 +41,41 @@ class _ShopScreenState extends State<ShopScreen> {
 
   static const _skins = <_ShopSkin>[
     _ShopSkin(
-      id: 'male',
+      id: CharacterService.male,
       name: 'Explorer Male',
       asset: 'assets/images/male_run.png',
-      owned: true,
     ),
     _ShopSkin(
-      id: 'female',
+      id: CharacterService.female,
       name: 'Explorer Female',
       asset: 'assets/images/female_run.png',
-      owned: true,
     ),
   ];
 
-  String _selectedId = 'male';
+  String _selectedId = CharacterService.male;
+  int _coins = 0;
+  Set<String> _unlocked = {
+    CharacterService.male,
+    CharacterService.female,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadShop();
+  }
+
+  Future<void> _loadShop() async {
+    final coins = await ShopService.getCoins();
+    final unlocked = await ShopService.getUnlockedCharacters();
+    final selected = await CharacterService.getSelectedCharacter();
+    if (!mounted) return;
+    setState(() {
+      _coins = coins;
+      _unlocked = unlocked.toSet();
+      _selectedId = selected;
+    });
+  }
 
   void _onBack() {
     final nav = Navigator.of(context);
@@ -65,8 +86,10 @@ class _ShopScreenState extends State<ShopScreen> {
     nav.pushReplacementNamed(AppRoutes.home);
   }
 
-  void _onSkinAction(_ShopSkin skin) {
-    if (!skin.owned) return;
+  Future<void> _onSkinAction(_ShopSkin skin) async {
+    if (!_unlocked.contains(skin.id)) return;
+    await CharacterService.setSelectedCharacter(skin.id);
+    if (!mounted) return;
     setState(() => _selectedId = skin.id);
   }
 
@@ -89,7 +112,7 @@ class _ShopScreenState extends State<ShopScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                 child: Column(
                   children: [
-                    _TopBar(onBack: _onBack, coins: 0),
+                    _TopBar(onBack: _onBack, coins: _coins),
                     const SizedBox(height: 12),
                     Expanded(
                       child: Center(
@@ -104,6 +127,7 @@ class _ShopScreenState extends State<ShopScreen> {
                               for (final skin in _skins)
                                 _SkinCard(
                                   skin: skin,
+                                  owned: _unlocked.contains(skin.id),
                                   selected: _selectedId == skin.id,
                                   onPressed: () => _onSkinAction(skin),
                                 ),
@@ -222,11 +246,13 @@ class _TopBar extends StatelessWidget {
 class _SkinCard extends StatelessWidget {
   const _SkinCard({
     required this.skin,
+    required this.owned,
     required this.selected,
     required this.onPressed,
   });
 
   final _ShopSkin skin;
+  final bool owned;
   final bool selected;
   final VoidCallback onPressed;
 
@@ -274,10 +300,10 @@ class _SkinCard extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              _StatusChip(owned: skin.owned, price: skin.price),
+              _StatusChip(owned: owned, price: skin.price),
               const Spacer(),
               _ActionButton(
-                owned: skin.owned,
+                owned: owned,
                 selected: selected,
                 onPressed: onPressed,
               ),
