@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
+import 'package:runners_rush/screens/consent_screen.dart';
+import 'package:runners_rush/screens/home_screen.dart';
 import 'package:runners_rush/screens/onboarding_screen.dart';
+import 'package:runners_rush/services/onboarding_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -76,7 +79,7 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     _introController.forward();
-    _navigationTimer = Timer(_navigateAfter, _openOnboarding);
+    _navigationTimer = Timer(_navigateAfter, _continueAfterSplash);
   }
 
   Future<void> _setEdgeToEdge() async {
@@ -84,17 +87,44 @@ class _SplashScreenState extends State<SplashScreen>
     SystemChrome.setSystemUIOverlayStyle(_overlayStyle);
   }
 
-  void _openOnboarding() {
+  Future<void> _continueAfterSplash() async {
     if (!mounted) return;
     _pulseController.stop();
+
+    final firstLaunchDone = await OnboardingService.hasCompletedFirstLaunch();
+    if (!mounted) return;
+    if (firstLaunchDone) {
+      _fadeTo(
+        name: AppRoutes.home,
+        page: const HomeScreen(),
+      );
+      return;
+    }
+
+    final onboardingDone = await OnboardingService.isOnboardingCompleted();
+    if (!mounted) return;
+    if (onboardingDone) {
+      _fadeTo(
+        name: AppRoutes.consent,
+        page: const ConsentScreen(),
+      );
+      return;
+    }
+
+    _fadeTo(
+      name: AppRoutes.onboarding,
+      page: const OnboardingScreen(),
+    );
+  }
+
+  void _fadeTo({required String name, required Widget page}) {
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
-        settings: const RouteSettings(name: AppRoutes.onboarding),
+        settings: RouteSettings(name: name),
         opaque: false,
         transitionDuration: _routeFadeDuration,
-        pageBuilder: (context, animation, secondaryAnimation) {
-          return const OnboardingScreen();
-        },
+        pageBuilder: (context, animation, secondaryAnimation) => page,
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
             opacity: CurvedAnimation(

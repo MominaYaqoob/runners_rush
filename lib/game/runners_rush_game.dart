@@ -11,8 +11,10 @@ import 'package:runners_rush/game/ground_strip_component.dart';
 import 'package:runners_rush/game/obstacle_component.dart';
 import 'package:runners_rush/game/player_component.dart';
 import 'package:runners_rush/services/audio_service.dart';
+import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/score_service.dart';
 import 'package:runners_rush/services/settings_service.dart';
+import 'package:runners_rush/services/shop_service.dart';
 import 'package:vibration/vibration.dart';
 
 class RunnersRushGame extends FlameGame
@@ -127,12 +129,21 @@ class RunnersRushGame extends FlameGame
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final previousBest = await ScoreService.getHighScore();
       await ScoreService.saveHighScoreIfBetter(capturedScore);
+      final earnedCoins = (capturedScore * 0.1).floor();
+      if (earnedCoins > 0) {
+        await ShopService.addCoins(earnedCoins);
+      }
+      final character = await CharacterService.getSelectedCharacter();
+      final best = capturedScore > previousBest ? capturedScore : previousBest;
       if (!ctx.mounted) return;
       Navigator.of(ctx).pushReplacementNamed(
         AppRoutes.gameOver,
         arguments: {
           'score': capturedScore,
+          'best': best,
           'isNewHighScore': capturedScore > previousBest,
+          'coinsEarned': earnedCoins,
+          'character': character,
         },
       );
     });

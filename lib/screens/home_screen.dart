@@ -8,6 +8,7 @@ import 'package:runners_rush/services/audio_service.dart';
 import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/score_service.dart';
 import 'package:runners_rush/services/settings_service.dart';
+import 'package:runners_rush/services/shop_service.dart';
 
 class _Hud {
   static const fill = Color(0x66000000);
@@ -57,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _selectedCharacter = _maleAsset;
   bool _soundOn = true;
   int _highScore = 0;
+  int _coins = 0;
 
   @override
   void initState() {
@@ -68,16 +70,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadPersistedState() async {
     final highScore = await ScoreService.getHighScore();
+    final coins = await ShopService.getCoins();
     await SettingsService.init();
     await AudioService.init();
     final character = await CharacterService.getSelectedCharacter();
     if (!mounted) return;
     setState(() {
       _highScore = highScore;
+      _coins = coins;
       _soundOn = SettingsService.soundEffectsEnabled;
       _selectedCharacter =
           character == CharacterService.female ? _femaleAsset : _maleAsset;
     });
+  }
+
+  Future<void> _openAndRefresh(String routeName) async {
+    await Navigator.pushNamed(context, routeName);
+    if (!mounted) return;
+    await _loadPersistedState();
   }
 
   Future<void> _openCharacterSelect() async {
@@ -150,13 +160,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             _HighScoreBadge(
                               highScore: _highScore,
-                              onTap: () {
-                                Navigator.pushNamed(
-                                  context,
-                                  AppRoutes.scoreboard,
-                                );
-                              },
+                              onTap: () => _openAndRefresh(AppRoutes.scoreboard),
                             ),
+                            const SizedBox(height: 8),
+                            _CoinsBadge(coins: _coins),
                             const SizedBox(height: 16),
                             Expanded(
                               child: Align(
@@ -165,36 +172,20 @@ class _HomeScreenState extends State<HomeScreen> {
                                   fit: BoxFit.scaleDown,
                                   alignment: Alignment.centerRight,
                                   child: _ActionStack(
-                                    onPlay: () {
-                                      Navigator.pushNamed(
+                                    onPlay: () async {
+                                      await Navigator.pushNamed(
                                         context,
                                         AppRoutes.gameplay,
                                         arguments: _selectedCharacter,
                                       );
+                                      if (!mounted) return;
+                                      await _loadPersistedState();
                                     },
                                     onCharacter: _openCharacterSelect,
-                                    onShop: () async {
-                                      await Navigator.pushNamed(
-                                        context,
-                                        AppRoutes.shop,
-                                      );
-                                      if (!mounted) return;
-                                      final character = await CharacterService
-                                          .getSelectedCharacter();
-                                      if (!mounted) return;
-                                      setState(() {
-                                        _selectedCharacter =
-                                            character == CharacterService.female
-                                                ? _femaleAsset
-                                                : _maleAsset;
-                                      });
-                                    },
-                                    onSettings: () {
-                                      Navigator.pushNamed(
-                                        context,
-                                        AppRoutes.settings,
-                                      );
-                                    },
+                                    onShop: () =>
+                                        _openAndRefresh(AppRoutes.shop),
+                                    onSettings: () =>
+                                        _openAndRefresh(AppRoutes.settings),
                                   ),
                                 ),
                               ),
@@ -283,6 +274,42 @@ class _HighScoreBadge extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CoinsBadge extends StatelessWidget {
+  const _CoinsBadge({required this.coins});
+
+  final int coins;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
+      decoration: _Hud.card(radius: 20),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'assets/images/coin.png',
+            width: 18,
+            height: 18,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '$coins',
+            style: GoogleFonts.baloo2(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              height: 1,
+            ),
+          ),
+        ],
       ),
     );
   }

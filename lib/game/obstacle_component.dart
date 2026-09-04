@@ -5,7 +5,7 @@ import 'package:runners_rush/game/player_component.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
 
 /// Scrolling hazard. Ground sprites sit on [PlayerComponent] ground; flying
-/// ones fly straight overhead, facing the runner.
+/// ones sit at chest height so the runner must jump.
 class ObstacleComponent extends SpriteComponent
     with CollisionCallbacks, HasGameReference<RunnersRushGame> {
   ObstacleComponent({
@@ -19,8 +19,9 @@ class ObstacleComponent extends SpriteComponent
   static const bushHeightRatio = 0.24 * sizeScale;
   /// Arrow height vs screen — large enough to read, short enough to jump over.
   static const flyingHeightRatio = 0.078;
-  /// Gap between standing hitbox top and flying hitbox bottom (run-under).
-  static const flyingRunUnderGapRatio = 0.04;
+  /// Hitbox center as a fraction of player height above the feet (chest).
+  /// High enough that a standing runner always hits; well below jump peak.
+  static const flyingCenterFromPlayerFeet = 0.52;
   static const flyingSpeedMultiplier = 1.4;
   static final hitboxScale = Vector2(0.50, 0.50);
   /// Hitbox center, as a fraction of sprite height above the feet.
@@ -36,6 +37,7 @@ class ObstacleComponent extends SpriteComponent
     return Vector2(spriteSize.x * scale.x, spriteSize.y * scale.y);
   }
 
+  /// World-space center offset from the feet (bottom-center). Used by tests.
   static Vector2 hitboxCenterOffset(Vector2 spriteSize, {required bool flying}) {
     if (flying) {
       return Vector2(
@@ -46,15 +48,30 @@ class ObstacleComponent extends SpriteComponent
     return Vector2(0, -spriteSize.y * hitboxCenterYFromFeet);
   }
 
-  /// Sprite bottom Y so a standing runner passes under and a full jump goes over.
+  /// Flame local position (top-left parent space) for a centered hitbox.
+  static Vector2 hitboxLocalCenter(Vector2 spriteSize, {required bool flying}) {
+    if (flying) {
+      return Vector2(
+        spriteSize.x / 2 + spriteSize.x * flyingHitboxCenterX,
+        spriteSize.y * (1 - flyingHitboxCenterYFromFeet),
+      );
+    }
+    return Vector2(
+      spriteSize.x / 2,
+      spriteSize.y * (1 - hitboxCenterYFromFeet),
+    );
+  }
+
+  /// Sprite bottom Y so the shaft sits on the standing runner's chest.
   static double flyingBottomY(double screenHeight, double obstacleHeight) {
-    final playerTop = PlayerComponent.standingHitboxTop(screenHeight);
-    final gap = screenHeight * flyingRunUnderGapRatio;
-    final desiredHitboxBottom = playerTop - gap;
-    final spriteSize = Vector2(obstacleHeight, obstacleHeight);
-    final box = hitboxSizeFor(spriteSize, flying: true);
-    final offset = hitboxCenterOffset(spriteSize, flying: true);
-    return desiredHitboxBottom - offset.y - box.y / 2;
+    final groundY = screenHeight * (1 - PlayerComponent.groundHeightRatio);
+    final playerH = screenHeight * PlayerComponent.heightRatio;
+    final centerY = groundY - playerH * flyingCenterFromPlayerFeet;
+    final offset = hitboxCenterOffset(
+      Vector2(obstacleHeight, obstacleHeight),
+      flying: true,
+    );
+    return centerY - offset.y;
   }
 
   static double flyingHitboxTop(double screenHeight, double obstacleHeight) {
@@ -89,7 +106,7 @@ class ObstacleComponent extends SpriteComponent
     }
     final box = RectangleHitbox(
       size: hitboxSizeFor(size, flying: flying),
-      position: hitboxCenterOffset(size, flying: flying),
+      position: hitboxLocalCenter(size, flying: flying),
       anchor: Anchor.center,
       collisionType: CollisionType.passive,
     );

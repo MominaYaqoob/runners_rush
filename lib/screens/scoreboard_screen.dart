@@ -2,22 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
+import 'package:runners_rush/services/score_service.dart';
 
-class _DummyScore {
-  const _DummyScore({
-    required this.rank,
-    required this.name,
-    required this.score,
-    required this.icon,
-  });
-
-  final int rank;
-  final String name;
-  final int score;
-  final IconData icon;
-}
-
-class ScoreboardScreen extends StatelessWidget {
+class ScoreboardScreen extends StatefulWidget {
   const ScoreboardScreen({super.key});
 
   static const _overlayStyle = SystemUiOverlayStyle(
@@ -32,14 +19,31 @@ class ScoreboardScreen extends StatelessWidget {
   static const _hudFill = Color(0x66000000);
   static const _hudBorder = Color(0x26FFFFFF);
 
-  static const _entries = <_DummyScore>[
-    _DummyScore(rank: 1, name: 'Explorer', score: 1250, icon: Icons.person_rounded),
-    _DummyScore(rank: 2, name: 'Runner', score: 980, icon: Icons.directions_run_rounded),
-    _DummyScore(rank: 3, name: 'Scout', score: 750, icon: Icons.explore_rounded),
-    _DummyScore(rank: 4, name: 'Ranger', score: 620, icon: Icons.hiking_rounded),
-    _DummyScore(rank: 5, name: 'Pathfinder', score: 540, icon: Icons.terrain_rounded),
-    _DummyScore(rank: 6, name: 'Trailblazer', score: 410, icon: Icons.forest_rounded),
-  ];
+  @override
+  State<ScoreboardScreen> createState() => _ScoreboardScreenState();
+}
+
+class _ScoreboardScreenState extends State<ScoreboardScreen> {
+  int _highScore = 0;
+  List<int> _recentRuns = const [];
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadScores();
+  }
+
+  Future<void> _loadScores() async {
+    final highScore = await ScoreService.getHighScore();
+    final recent = await ScoreService.getRecentRuns();
+    if (!mounted) return;
+    setState(() {
+      _highScore = highScore;
+      _recentRuns = recent;
+      _loaded = true;
+    });
+  }
 
   void _onBack(BuildContext context) {
     final nav = Navigator.of(context);
@@ -53,7 +57,7 @@ class ScoreboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: _overlayStyle,
+      value: ScoreboardScreen._overlayStyle,
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Stack(
@@ -75,15 +79,48 @@ class ScoreboardScreen extends StatelessWidget {
                       child: Center(
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 560),
-                          child: ListView.separated(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            itemCount: _entries.length,
-                            separatorBuilder: (context, index) =>
-                                const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              return _ScoreRow(entry: _entries[index]);
-                            },
-                          ),
+                          child: !_loaded
+                              ? const SizedBox.shrink()
+                              : ListView(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  children: [
+                                    _BestScoreCard(score: _highScore),
+                                    const SizedBox(height: 14),
+                                    Text(
+                                      'Recent runs',
+                                      style: GoogleFonts.baloo2(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white.withValues(
+                                          alpha: 0.85,
+                                        ),
+                                        height: 1.1,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    if (_recentRuns.isEmpty)
+                                      const _EmptyRuns()
+                                    else
+                                      ...List.generate(_recentRuns.length, (
+                                        index,
+                                      ) {
+                                        final rank = index + 1;
+                                        return Padding(
+                                          padding: EdgeInsets.only(
+                                            bottom: index ==
+                                                    _recentRuns.length - 1
+                                                ? 0
+                                                : 8,
+                                          ),
+                                          child: _ScoreRow(
+                                            rank: rank,
+                                            score: _recentRuns[index],
+                                            label: 'Run $rank',
+                                          ),
+                                        );
+                                      }),
+                                  ],
+                                ),
                         ),
                       ),
                     ),
@@ -92,6 +129,107 @@ class ScoreboardScreen extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BestScoreCard extends StatelessWidget {
+  const _BestScoreCard({required this.score});
+
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0x73000000),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFFFC857).withValues(alpha: 0.55),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFFC857).withValues(alpha: 0.18),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFFFFC857).withValues(alpha: 0.9),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFFC857).withValues(alpha: 0.4),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.emoji_events_rounded,
+              color: Color(0xFF2A1A12),
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              'Best score',
+              style: GoogleFonts.baloo2(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                height: 1.1,
+              ),
+            ),
+          ),
+          Text(
+            '$score',
+            style: GoogleFonts.baloo2(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyRuns extends StatelessWidget {
+  const _EmptyRuns();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      decoration: BoxDecoration(
+        color: ScoreboardScreen._hudFill,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ScoreboardScreen._hudBorder),
+      ),
+      child: Text(
+        'No runs yet — play a game!',
+        textAlign: TextAlign.center,
+        style: GoogleFonts.baloo2(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: Colors.white.withValues(alpha: 0.75),
+          height: 1.2,
         ),
       ),
     );
@@ -161,9 +299,15 @@ class _TopBar extends StatelessWidget {
 }
 
 class _ScoreRow extends StatelessWidget {
-  const _ScoreRow({required this.entry});
+  const _ScoreRow({
+    required this.rank,
+    required this.score,
+    required this.label,
+  });
 
-  final _DummyScore entry;
+  final int rank;
+  final int score;
+  final String label;
 
   static const _medalColors = <int, Color>{
     1: Color(0xFFFFC857),
@@ -171,9 +315,9 @@ class _ScoreRow extends StatelessWidget {
     3: Color(0xFFD0894B),
   };
 
-  bool get _isPodium => entry.rank <= 3;
+  bool get _isPodium => rank <= 3;
 
-  Color get _medalColor => _medalColors[entry.rank] ?? const Color(0x66FFFFFF);
+  Color get _medalColor => _medalColors[rank] ?? const Color(0x66FFFFFF);
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +347,7 @@ class _ScoreRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _RankBadge(rank: entry.rank, color: _medalColor, featured: _isPodium),
+          _RankBadge(rank: rank, color: _medalColor, featured: _isPodium),
           const SizedBox(width: 12),
           Container(
             width: _isPodium ? 40 : 34,
@@ -214,7 +358,7 @@ class _ScoreRow extends StatelessWidget {
               border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
             ),
             child: Icon(
-              entry.icon,
+              Icons.directions_run_rounded,
               color: Colors.white,
               size: _isPodium ? 22 : 18,
             ),
@@ -222,7 +366,7 @@ class _ScoreRow extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              entry.name,
+              label,
               style: GoogleFonts.baloo2(
                 fontSize: _isPodium ? 18 : 15,
                 fontWeight: FontWeight.w700,
@@ -232,7 +376,7 @@ class _ScoreRow extends StatelessWidget {
             ),
           ),
           Text(
-            '${entry.score}',
+            '$score',
             style: GoogleFonts.baloo2(
               fontSize: _isPodium ? 22 : 17,
               fontWeight: FontWeight.w800,
@@ -282,7 +426,9 @@ class _RankBadge extends StatelessWidget {
         style: GoogleFonts.baloo2(
           fontSize: featured ? 18 : 13,
           fontWeight: FontWeight.w800,
-          color: featured ? const Color(0xFF2A1A12) : Colors.white.withValues(alpha: 0.85),
+          color: featured
+              ? const Color(0xFF2A1A12)
+              : Colors.white.withValues(alpha: 0.85),
           height: 1,
         ),
       ),

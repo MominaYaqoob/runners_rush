@@ -35,20 +35,18 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     return Vector2(spriteSize.x * scale.x, spriteSize.y * scale.y);
   }
 
+  /// World-space center offset from the feet (bottom-center). Used by tests.
   static Vector2 hitboxCenterOffset(Vector2 spriteSize, {bool jumping = false}) {
     final fromFeet =
         jumping ? jumpHitboxCenterYFromFeet : hitboxCenterYFromFeet;
     return Vector2(0, -spriteSize.y * fromFeet);
   }
 
-  /// Top of the standing hitbox (Y-down) for a given screen height.
-  static double standingHitboxTop(double screenHeight) {
-    final groundY = screenHeight * (1 - groundHeightRatio);
-    final h = screenHeight * heightRatio;
-    final spriteSize = Vector2(h, h);
-    final box = hitboxSizeFor(spriteSize);
-    final offset = hitboxCenterOffset(spriteSize);
-    return groundY + offset.y - box.y / 2;
+  /// Flame local position (top-left parent space) for a centered hitbox.
+  static Vector2 hitboxLocalCenter(Vector2 spriteSize, {bool jumping = false}) {
+    final fromFeet =
+        jumping ? jumpHitboxCenterYFromFeet : hitboxCenterYFromFeet;
+    return Vector2(spriteSize.x / 2, spriteSize.y * (1 - fromFeet));
   }
 
   /// Bottom of the airborne hitbox at jump peak (Y-down).
@@ -65,7 +63,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
   /// Peak rise in pixels from [jumpVelocity] and [gravity] (Y-down world).
   static double get jumpPeakHeight =>
       jumpVelocity * jumpVelocity / (2 * gravity);
-  static const runStepTime = 0.06;
+  static const runStepTime = 0.055;
   static const jumpStartDuration = 0.08;
   static const jumpLandDuration = 0.08;
 
@@ -77,6 +75,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     'run_5.png',
     'run_6.png',
     'run_7.png',
+    'run_8.png',
   ];
 
   PlayerComponent() : super(anchor: Anchor.bottomCenter);
@@ -100,15 +99,26 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
 
     final selected = await CharacterService.getSelectedCharacter();
     final prefix =
-        selected == CharacterService.female ? CharacterService.female : CharacterService.male;
+        selected == CharacterService.female
+            ? CharacterService.female
+            : CharacterService.male;
 
-    final runSprites = [
-      for (final suffix in _runFrameSuffixes)
-        await _loadCharacterSprite(prefix, suffix),
-    ];
-    final jumpStart = await _loadCharacterSprite(prefix, 'jump_start.png');
-    final jumpAir = await _loadCharacterSprite(prefix, 'jump.png');
-    final jumpLand = await _loadCharacterSprite(prefix, 'jump_land.png');
+    final runSprites = await _loadRunSprites(prefix);
+    final jumpStart = await _loadPoseSprite(
+      prefix,
+      preferred: 'jump_start.png',
+      fallbacks: const ['jump.png', 'run.png'],
+    );
+    final jumpAir = await _loadPoseSprite(
+      prefix,
+      preferred: 'jump.png',
+      fallbacks: const ['jump_start.png', 'run.png'],
+    );
+    final jumpLand = await _loadPoseSprite(
+      prefix,
+      preferred: 'jump_land.png',
+      fallbacks: const ['jump.png', 'run.png'],
+    );
 
     animations = {
       PlayerState.running: SpriteAnimation.spriteList(
@@ -133,13 +143,14 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     };
     current = PlayerState.running;
     playing = true;
-    paint.filterQuality = FilterQuality.medium;
+    paint.filterQuality = FilterQuality.high;
     _layout();
     position = Vector2(_fixedX, groundY);
     _bodyHitbox = RectangleHitbox(
       size: _hitboxSize,
       position: _hitboxPosition,
       anchor: Anchor.center,
+      collisionType: CollisionType.active,
     );
     HitboxDebug.apply(_bodyHitbox!, HitboxDebug.playerColor);
     await add(_bodyHitbox!);
@@ -244,7 +255,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
   Vector2 get _hitboxSize => hitboxSizeFor(size, jumping: !isOnGround);
 
   Vector2 get _hitboxPosition =>
-      hitboxCenterOffset(size, jumping: !isOnGround);
+      hitboxLocalCenter(size, jumping: !isOnGround);
 
   void _syncHitbox() {
     final box = _bodyHitbox;
@@ -253,12 +264,38 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     box.position.setFrom(_hitboxPosition);
   }
 
-  Future<Sprite> _loadCharacterSprite(String prefix, String suffix) async {
-    final preferred = '${prefix}_$suffix';
-    if (prefix != CharacterService.male && await _hasImage(preferred)) {
-      return game.loadSprite(preferred);
+  /// Smooth multi-frame run cycle for [prefix], falling back to that
+  /// character's single `*_run.png` only (never another character's body).
+  Future<List<Sprite>> _loadRunSprites(String prefix) async {
+    final frames = <Sprite>[];
+    for (final suffix in _runFrameSuffixes) {
+      final name = '${prefix}_$suffix';
+      if (prefix == CharacterService.male || await _hasImage(name)) {
+        try {
+          frames.add(await game.loadSprite(name));
+        } catch (_) {}
+      }
     }
-    return game.loadSprite('male_$suffix');
+    if (frames.length >= 2) return frames;
+
+    final baseRun = '${prefix}_run.png';
+    return [await game.loadSprite(baseRun)];
+  }
+
+  Future<Sprite> _loadPoseSprite(
+    String prefix, {
+    required String preferred,
+    required List<String> fallbacks,
+  }) async {
+    for (final suffix in [preferred, ...fallbacks]) {
+      final name = '${prefix}_$suffix';
+      if (prefix == CharacterService.male || await _hasImage(name)) {
+        try {
+          return await game.loadSprite(name);
+        } catch (_) {}
+      }
+    }
+    return game.loadSprite('${prefix}_run.png');
   }
 
   Future<bool> _hasImage(String filename) async {

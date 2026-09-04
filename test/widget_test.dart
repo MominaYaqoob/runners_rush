@@ -58,6 +58,39 @@ void main() {
     expect(find.text('Get Started'), findsNothing);
   });
 
+  testWidgets('splash goes home when first launch already completed', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({
+      'onboarding_completed': true,
+      'consent_accepted': true,
+    });
+    await setLandscape(tester);
+    await tester.pumpWidget(const RunnersRushApp());
+    await tester.pump();
+
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 800));
+
+    expect(find.text('Run & Escape'), findsNothing);
+    expect(find.byType(HomeScreen), findsOneWidget);
+  });
+
+  testWidgets('splash goes consent when onboarding done but consent pending', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({
+      'onboarding_completed': true,
+      'consent_accepted': false,
+    });
+    await setLandscape(tester);
+    await tester.pumpWidget(const RunnersRushApp());
+    await tester.pump();
+
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 800));
+
+    expect(find.text('Before You Start'), findsOneWidget);
+  });
+
   testWidgets('skip from first slide goes to consent', (WidgetTester tester) async {
     await setLandscape(tester);
     await tester.pumpWidget(_onboardingApp());
@@ -145,7 +178,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(GameWidget<RunnersRushGame>), findsOneWidget);
-    expect(find.text('0'), findsOneWidget);
+    expect(find.text('0'), findsWidgets);
     expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.pause_rounded));
@@ -255,14 +288,29 @@ void main() {
     );
     await tester.pump();
     final navigator = tester.state<NavigatorState>(find.byType(Navigator));
-    navigator.pushNamed(AppRoutes.gameOver, arguments: 128);
+    navigator.pushNamed(
+      AppRoutes.gameOver,
+      arguments: {
+        'score': 128,
+        'best': 200,
+        'coinsEarned': 12,
+        'isNewHighScore': false,
+        'character': 'male',
+      },
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('GAME OVER'), findsOneWidget);
     expect(find.text('Score: 128'), findsOneWidget);
+    expect(find.text('Best: 200'), findsOneWidget);
+    expect(find.text('+12 coins'), findsOneWidget);
   });
 
-  testWidgets('scoreboard shows dummy ranks and back goes home', (WidgetTester tester) async {
+  testWidgets('scoreboard shows local high score and recent runs', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({
+      'high_score': 1250,
+      'recent_runs': '[1250,980,410]',
+    });
     await setLandscape(tester);
     await tester.pumpWidget(
       MaterialApp(
@@ -272,13 +320,14 @@ void main() {
         },
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Leaderboard'), findsOneWidget);
-    expect(find.text('Explorer'), findsOneWidget);
-    expect(find.text('1250'), findsOneWidget);
-
-    await tester.scrollUntilVisible(find.text('Trailblazer'), 80);
+    expect(find.text('Best score'), findsOneWidget);
+    expect(find.text('1250'), findsWidgets);
+    expect(find.text('Recent runs'), findsOneWidget);
+    expect(find.text('Run 1'), findsOneWidget);
+    expect(find.text('980'), findsOneWidget);
     expect(find.text('410'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.arrow_back_rounded));
@@ -287,6 +336,10 @@ void main() {
   });
 
   testWidgets('shop shows skins coins and select', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({
+      'coins': 500,
+      'unlocked_characters': ['male'],
+    });
     await setLandscape(tester);
     await tester.pumpWidget(
       MaterialApp(
@@ -296,19 +349,24 @@ void main() {
         },
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Shop'), findsOneWidget);
+    expect(find.text('Characters'), findsOneWidget);
     expect(find.text('Explorer Male'), findsOneWidget);
     expect(find.text('Explorer Female'), findsOneWidget);
-    expect(find.text('Owned'), findsNWidgets(2));
-    expect(find.text('Selected'), findsOneWidget);
-    expect(find.text('Select'), findsOneWidget);
+    expect(find.text('Owned'), findsAtLeastNWidgets(1));
+    expect(find.text('Selected'), findsAtLeastNWidgets(1));
+    expect(find.text('Buy'), findsWidgets);
+    expect(find.text('275'), findsOneWidget);
 
-    await tester.tap(find.text('Select'));
-    await tester.pump();
-    await tester.pump();
-    expect(find.text('Selected'), findsOneWidget);
+    await tester.ensureVisible(find.text('275'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Buy').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Selected'), findsAtLeastNWidgets(1));
+    expect(find.text('Owned'), findsAtLeastNWidgets(2));
+    expect(find.text('275'), findsNothing);
 
     await tester.tap(find.byIcon(Icons.arrow_back_rounded));
     await tester.pumpAndSettle();

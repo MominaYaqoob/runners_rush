@@ -3,14 +3,14 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 import 'package:runners_rush/game/player_component.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
+import 'package:runners_rush/services/shop_service.dart';
 
-/// Two-or-more looping copies of [ground_texture.png], scrolling at obstacle speed.
+/// Looping ground strip matched to the selected shop background theme.
 class GroundStripComponent extends PositionComponent
     with HasGameReference<RunnersRushGame>, HasPaint {
-  static const spritePath = 'ground_texture.png';
-
   Sprite? _sprite;
   final List<SpriteComponent> _pieces = [];
+  String _spritePath = ShopService.defaultGroundAssetPath;
 
   GroundStripComponent()
       : super(anchor: Anchor.topLeft, priority: -10);
@@ -18,7 +18,17 @@ class GroundStripComponent extends PositionComponent
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    _sprite = await game.loadSprite(spritePath);
+    try {
+      _spritePath = await ShopService.getSelectedGroundAssetPath();
+    } catch (_) {
+      _spritePath = ShopService.defaultGroundAssetPath;
+    }
+    try {
+      _sprite = await game.loadSprite(_spritePath);
+    } catch (_) {
+      _spritePath = ShopService.defaultGroundAssetPath;
+      _sprite = await game.loadSprite(_spritePath);
+    }
     paint.filterQuality = FilterQuality.medium;
     layoutTo(game.size);
   }

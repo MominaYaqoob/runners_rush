@@ -15,16 +15,28 @@ void main() {
     expect(PlayerComponent.jumpPeakHeight, closeTo(301.89, 0.05));
   });
 
-  test('flying hitbox sits in the run-under / jump-over window at 800x360', () {
+  test('flying hitbox overlaps standing chest and sits below jump peak at 800x360', () {
     const h = 360.0;
+    final groundY = h * (1 - PlayerComponent.groundHeightRatio);
+    final playerH = h * PlayerComponent.heightRatio;
+    final playerSize = Vector2(playerH, playerH);
     final obsH = h * ObstacleComponent.flyingHeightRatio;
-    final playerTop = PlayerComponent.standingHitboxTop(h);
+    final obsW = obsH * _flyingAspect;
+    final standing = _playerAabb(
+      cx: 0,
+      bottom: groundY,
+      spriteSize: playerSize,
+    );
+    final flying = _obstacleAabb(
+      cx: 0,
+      bottom: ObstacleComponent.flyingBottomY(h, obsH),
+      spriteSize: Vector2(obsW, obsH),
+      flying: true,
+    );
     final peakBottom = PlayerComponent.jumpPeakHitboxBottom(h);
     final flyingTop = ObstacleComponent.flyingHitboxTop(h, obsH);
-    final flyingBottom = ObstacleComponent.flyingHitboxBottom(h, obsH);
 
-    expect(flyingBottom, lessThan(playerTop));
-    expect(playerTop - flyingBottom, greaterThan(h * 0.03));
+    expect(standing.overlaps(flying), isTrue);
     expect(peakBottom, lessThan(flyingTop));
     expect(flyingTop - peakBottom, greaterThan(80));
   });
@@ -48,20 +60,6 @@ void main() {
     _Size(844, 390),
     _Size(915, 412),
   ]) {
-    test('flying arrow sits above standing player at ${size.w.toInt()}x${size.h.toInt()}', () {
-      final obsH = size.h * ObstacleComponent.flyingHeightRatio;
-      final flyingBottom = ObstacleComponent.flyingHitboxBottom(size.h, obsH);
-      final playerTop = PlayerComponent.standingHitboxTop(size.h);
-
-      expect(
-        flyingBottom,
-        lessThan(playerTop),
-        reason:
-            'need a gap to run under: flyingBottom=$flyingBottom '
-            'playerTop=$playerTop',
-      );
-    });
-
     test('jump peak clears flying arrow at ${size.w.toInt()}x${size.h.toInt()}', () {
       final obsH = size.h * ObstacleComponent.flyingHeightRatio;
       final flyingTop = ObstacleComponent.flyingHitboxTop(size.h, obsH);
@@ -76,7 +74,7 @@ void main() {
       );
     });
 
-    test('running passes under flying arrow at ${size.w.toInt()}x${size.h.toInt()}', () {
+    test('running hits flying arrow at ${size.w.toInt()}x${size.h.toInt()}', () {
       final result = _simulate(
         size: size,
         jumpLeadSeconds: null,
@@ -84,9 +82,9 @@ void main() {
       );
       expect(
         result.hit,
-        isFalse,
+        isTrue,
         reason:
-            'running should go under at ${size.w}x${size.h}: ${result.debug}',
+            'running should hit flying at ${size.w}x${size.h}: ${result.debug}',
       );
     });
 

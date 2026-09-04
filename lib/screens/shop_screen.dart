@@ -5,20 +5,6 @@ import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/shop_service.dart';
 
-class _ShopSkin {
-  const _ShopSkin({
-    required this.id,
-    required this.name,
-    required this.asset,
-    this.price = 0,
-  });
-
-  final String id;
-  final String name;
-  final String asset;
-  final int price;
-}
-
 class ShopScreen extends StatefulWidget {
   const ShopScreen({super.key});
 
@@ -39,25 +25,12 @@ class _ShopScreenState extends State<ShopScreen> {
   static const hudFill = Color(0x66000000);
   static const hudBorder = Color(0x26FFFFFF);
 
-  static const _skins = <_ShopSkin>[
-    _ShopSkin(
-      id: CharacterService.male,
-      name: 'Explorer Male',
-      asset: 'assets/images/male_run.png',
-    ),
-    _ShopSkin(
-      id: CharacterService.female,
-      name: 'Explorer Female',
-      asset: 'assets/images/female_run.png',
-    ),
-  ];
-
   String _selectedId = CharacterService.male;
+  String _selectedBackgroundId = ShopService.eveningId;
   int _coins = 0;
-  Set<String> _unlocked = {
-    CharacterService.male,
-    CharacterService.female,
-  };
+  Set<String> _unlocked = {CharacterService.male};
+  Set<String> _unlockedBackgrounds = {ShopService.eveningId};
+  String? _toast;
 
   @override
   void initState() {
@@ -69,11 +42,17 @@ class _ShopScreenState extends State<ShopScreen> {
     final coins = await ShopService.getCoins();
     final unlocked = await ShopService.getUnlockedCharacters();
     final selected = await CharacterService.getSelectedCharacter();
+    final unlockedBgs = await ShopService.getUnlockedBackgrounds();
+    final selectedBg = await ShopService.getSelectedBackground();
     if (!mounted) return;
+    final unlockedSet = unlocked.toSet();
     setState(() {
       _coins = coins;
-      _unlocked = unlocked.toSet();
-      _selectedId = selected;
+      _unlocked = unlockedSet;
+      _selectedId =
+          unlockedSet.contains(selected) ? selected : CharacterService.male;
+      _unlockedBackgrounds = unlockedBgs;
+      _selectedBackgroundId = selectedBg;
     });
   }
 
@@ -86,11 +65,62 @@ class _ShopScreenState extends State<ShopScreen> {
     nav.pushReplacementNamed(AppRoutes.home);
   }
 
-  Future<void> _onSkinAction(_ShopSkin skin) async {
-    if (!_unlocked.contains(skin.id)) return;
+  Future<void> _onSkinAction(ShopCharacter skin) async {
+    if (_unlocked.contains(skin.id)) {
+      await CharacterService.setSelectedCharacter(skin.id);
+      if (!mounted) return;
+      setState(() => _selectedId = skin.id);
+      return;
+    }
+
+    final ok = await ShopService.purchaseCharacter(skin.id, skin.price);
+    if (!mounted) return;
+    if (!ok) {
+      _showToast('Not enough coins');
+      return;
+    }
+    final coins = await ShopService.getCoins();
+    final unlocked = await ShopService.getUnlockedCharacters();
     await CharacterService.setSelectedCharacter(skin.id);
     if (!mounted) return;
-    setState(() => _selectedId = skin.id);
+    setState(() {
+      _coins = coins;
+      _unlocked = unlocked.toSet();
+      _selectedId = skin.id;
+    });
+  }
+
+  Future<void> _onBackgroundAction(ShopBackground bg) async {
+    if (_unlockedBackgrounds.contains(bg.id)) {
+      await ShopService.setSelectedBackground(bg.id);
+      if (!mounted) return;
+      setState(() => _selectedBackgroundId = bg.id);
+      return;
+    }
+
+    final ok = await ShopService.purchaseBackground(bg.id, bg.price);
+    if (!mounted) return;
+    if (!ok) {
+      _showToast('Not enough coins');
+      return;
+    }
+    final coins = await ShopService.getCoins();
+    final unlocked = await ShopService.getUnlockedBackgrounds();
+    await ShopService.setSelectedBackground(bg.id);
+    if (!mounted) return;
+    setState(() {
+      _coins = coins;
+      _unlockedBackgrounds = unlocked;
+      _selectedBackgroundId = bg.id;
+    });
+  }
+
+  void _showToast(String message) {
+    setState(() => _toast = message);
+    Future<void>.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      if (_toast == message) setState(() => _toast = null);
+    });
   }
 
   @override
@@ -113,24 +143,56 @@ class _ShopScreenState extends State<ShopScreen> {
                 child: Column(
                   children: [
                     _TopBar(onBack: _onBack, coins: _coins),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     Expanded(
                       child: Center(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 640),
-                          child: GridView.count(
-                            crossAxisCount: 2,
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 12,
-                            childAspectRatio: 1.05,
+                          constraints: const BoxConstraints(maxWidth: 720),
+                          child: ListView(
                             children: [
-                              for (final skin in _skins)
-                                _SkinCard(
-                                  skin: skin,
-                                  owned: _unlocked.contains(skin.id),
-                                  selected: _selectedId == skin.id,
-                                  onPressed: () => _onSkinAction(skin),
-                                ),
+                              _SectionTitle('Characters'),
+                              const SizedBox(height: 8),
+                              GridView.count(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                crossAxisCount: 2,
+                                mainAxisSpacing: 12,
+                                crossAxisSpacing: 12,
+                                childAspectRatio: 1.05,
+                                children: [
+                                  for (final skin in ShopService.characters)
+                                    _SkinCard(
+                                      skin: skin,
+                                      owned: _unlocked.contains(skin.id),
+                                      selected: _selectedId == skin.id,
+                                      onPressed: () => _onSkinAction(skin),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              _SectionTitle('Backgrounds'),
+                              const SizedBox(height: 8),
+                              GridView.count(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                crossAxisCount: 3,
+                                mainAxisSpacing: 10,
+                                crossAxisSpacing: 10,
+                                childAspectRatio: 1.15,
+                                children: [
+                                  for (final bg in ShopService.backgrounds)
+                                    _BackgroundCard(
+                                      background: bg,
+                                      owned: _unlockedBackgrounds.contains(
+                                        bg.id,
+                                      ),
+                                      selected:
+                                          _selectedBackgroundId == bg.id,
+                                      onPressed: () =>
+                                          _onBackgroundAction(bg),
+                                    ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -139,6 +201,62 @@ class _ShopScreenState extends State<ShopScreen> {
                   ],
                 ),
               ),
+            ),
+            if (_toast != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 28,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xE6000000),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: hudBorder),
+                    ),
+                    child: Text(
+                      _toast!,
+                      style: GoogleFonts.baloo2(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: GoogleFonts.baloo2(
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+          height: 1.1,
+          shadows: const [
+            Shadow(
+              color: Color(0x99000000),
+              blurRadius: 8,
+              offset: Offset(0, 2),
             ),
           ],
         ),
@@ -251,7 +369,7 @@ class _SkinCard extends StatelessWidget {
     required this.onPressed,
   });
 
-  final _ShopSkin skin;
+  final ShopCharacter skin;
   final bool owned;
   final bool selected;
   final VoidCallback onPressed;
@@ -281,7 +399,7 @@ class _SkinCard extends StatelessWidget {
         children: [
           Expanded(
             child: Image.asset(
-              skin.asset,
+              skin.assetPath,
               fit: BoxFit.contain,
               filterQuality: FilterQuality.high,
             ),
@@ -300,12 +418,130 @@ class _SkinCard extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              _StatusChip(owned: owned, price: skin.price),
+              if (owned)
+                const _StatusChip(owned: true, price: 0)
+              else
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      'assets/images/coin.png',
+                      width: 14,
+                      height: 14,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      '${skin.price}',
+                      style: GoogleFonts.baloo2(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFFFFD27A),
+                        height: 1,
+                      ),
+                    ),
+                  ],
+                ),
               const Spacer(),
               _ActionButton(
                 owned: owned,
                 selected: selected,
                 onPressed: onPressed,
+                buyLabel: 'Buy',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BackgroundCard extends StatelessWidget {
+  const _BackgroundCard({
+    required this.background,
+    required this.owned,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final ShopBackground background;
+  final bool owned;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: const Color(0x73000000),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: selected
+              ? const Color(0xFFFF8A3D)
+              : _ShopScreenState.hudBorder,
+          width: selected ? 2 : 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                background.flutterAsset,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                filterQuality: FilterQuality.medium,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            background.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.baloo2(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              height: 1.1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              if (owned)
+                _StatusChip(owned: true, price: 0)
+              else
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      'assets/images/coin.png',
+                      width: 14,
+                      height: 14,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      '${background.price}',
+                      style: GoogleFonts.baloo2(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFFFFD27A),
+                        height: 1,
+                      ),
+                    ),
+                  ],
+                ),
+              const Spacer(),
+              _ActionButton(
+                owned: owned,
+                selected: selected,
+                onPressed: onPressed,
+                buyLabel: 'Buy',
               ),
             ],
           ),
@@ -354,16 +590,18 @@ class _ActionButton extends StatelessWidget {
     required this.owned,
     required this.selected,
     required this.onPressed,
+    this.buyLabel = 'Unlock',
   });
 
   final bool owned;
   final bool selected;
   final VoidCallback onPressed;
+  final String buyLabel;
 
   @override
   Widget build(BuildContext context) {
     final label = !owned
-        ? 'Unlock'
+        ? buyLabel
         : selected
             ? 'Selected'
             : 'Select';
@@ -371,7 +609,7 @@ class _ActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onPressed,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           gradient: selected || !owned
@@ -387,7 +625,7 @@ class _ActionButton extends StatelessWidget {
         child: Text(
           label,
           style: GoogleFonts.baloo2(
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: FontWeight.w800,
             color: Colors.white,
             height: 1.1,

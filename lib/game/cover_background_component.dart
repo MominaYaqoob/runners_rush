@@ -3,15 +3,16 @@ import 'dart:ui';
 
 import 'package:flame/components.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
+import 'package:runners_rush/services/shop_service.dart';
 
-/// Full-screen evening sky, tiled horizontally and scrolled slower than the ground.
+/// Full-screen sky, tiled horizontally and scrolled slower than the ground.
 class CoverBackgroundComponent extends PositionComponent
     with HasGameReference<RunnersRushGame>, HasPaint {
-  static const spritePath = 'background_evening.png';
   static const parallaxFactor = 0.25;
 
   Sprite? _sprite;
   final List<SpriteComponent> _pieces = [];
+  String _spritePath = ShopService.backgroundById(ShopService.eveningId).assetPath;
 
   CoverBackgroundComponent()
       : super(anchor: Anchor.topLeft, position: Vector2.zero());
@@ -19,7 +20,13 @@ class CoverBackgroundComponent extends PositionComponent
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    _sprite = await game.loadSprite(spritePath);
+    try {
+      _spritePath = await ShopService.getSelectedBackgroundAssetPath();
+    } catch (_) {
+      _spritePath =
+          ShopService.backgroundById(ShopService.eveningId).assetPath;
+    }
+    _sprite = await game.loadSprite(_spritePath);
     paint.filterQuality = FilterQuality.medium;
     layoutTo(game.size);
   }

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/audio_service.dart';
+import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/score_service.dart';
 
 class GameOverScreen extends StatefulWidget {
@@ -11,11 +12,13 @@ class GameOverScreen extends StatefulWidget {
     this.score = 0,
     this.best = 0,
     this.isNewHighScore = false,
+    this.coinsEarned = 0,
   });
 
   final int score;
   final int best;
   final bool isNewHighScore;
+  final int coinsEarned;
 
   static const _overlayStyle = SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -34,46 +37,95 @@ class GameOverScreen extends StatefulWidget {
 }
 
 class _GameOverScreenState extends State<GameOverScreen> {
-  late int _best;
-  bool _highScoreLoaded = false;
+  int? _fallbackBest;
+  String _character = CharacterService.male;
 
   @override
   void initState() {
     super.initState();
-    _best = widget.best;
-    _loadHighScore();
-  }
-
-  Future<void> _loadHighScore() async {
-    final value = await ScoreService.getHighScore();
-    if (!mounted) return;
-    setState(() {
-      _best = value;
-      _highScoreLoaded = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _hydrateFromRoute();
     });
   }
 
-  ({int score, bool isNewHighScore}) _resolveArgs() {
+  Future<void> _hydrateFromRoute() async {
+    final resolved = _resolveArgs();
+    if (resolved.hasCharacter) {
+      setState(() => _character = resolved.character);
+    } else {
+      final value = await CharacterService.getSelectedCharacter();
+      if (!mounted) return;
+      setState(() => _character = value);
+    }
+
+    if (resolved.hasBest) return;
+    final value = await ScoreService.getHighScore();
+    if (!mounted) return;
+    setState(() => _fallbackBest = value);
+  }
+
+  ({
+    int score,
+    int best,
+    bool hasBest,
+    bool isNewHighScore,
+    int coinsEarned,
+    String character,
+    bool hasCharacter,
+  }) _resolveArgs() {
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is int) {
-      return (score: args, isNewHighScore: widget.isNewHighScore);
-    }
-    if (args is Map) {
       return (
-        score: (args['score'] as int?) ?? widget.score,
-        isNewHighScore:
-            (args['isNewHighScore'] as bool?) ?? widget.isNewHighScore,
+        score: args,
+        best: widget.best,
+        hasBest: false,
+        isNewHighScore: widget.isNewHighScore,
+        coinsEarned: widget.coinsEarned,
+        character: _character,
+        hasCharacter: false,
       );
     }
-    return (score: widget.score, isNewHighScore: widget.isNewHighScore);
+    if (args is Map) {
+      final bestArg = args['best'] as int?;
+      final characterArg = args['character'] as String?;
+      final hasCharacter = characterArg == CharacterService.male ||
+          characterArg == CharacterService.female;
+      return (
+        score: (args['score'] as int?) ?? widget.score,
+        best: bestArg ?? widget.best,
+        hasBest: bestArg != null,
+        isNewHighScore:
+            (args['isNewHighScore'] as bool?) ?? widget.isNewHighScore,
+        coinsEarned: (args['coinsEarned'] as int?) ?? widget.coinsEarned,
+        character: hasCharacter ? characterArg! : _character,
+        hasCharacter: hasCharacter,
+      );
+    }
+    return (
+      score: widget.score,
+      best: widget.best,
+      hasBest: false,
+      isNewHighScore: widget.isNewHighScore,
+      coinsEarned: widget.coinsEarned,
+      character: _character,
+      hasCharacter: false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final resolved = _resolveArgs();
     final resolvedScore = resolved.score;
-    final isNewHighScore = resolved.isNewHighScore ||
-        (_highScoreLoaded && resolvedScore > _best);
+    final best = resolved.hasBest
+        ? resolved.best
+        : (_fallbackBest ?? widget.best);
+    final isNewHighScore = resolved.isNewHighScore;
+    final fallCharacter =
+        resolved.hasCharacter ? resolved.character : _character;
+    final fallAsset = fallCharacter == CharacterService.female
+        ? 'assets/images/female_fall.png'
+        : 'assets/images/male_fall.png';
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: GameOverScreen._overlayStyle,
@@ -108,10 +160,19 @@ class _GameOverScreenState extends State<GameOverScreen> {
                       child: Align(
                         alignment: const Alignment(-0.15, 0.15),
                         child: Image.asset(
-                          'assets/images/male_fall.png',
+                          fallAsset,
                           height: MediaQuery.sizeOf(context).height * 0.78,
                           fit: BoxFit.contain,
                           filterQuality: FilterQuality.high,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Image.asset(
+                              'assets/images/male_fall.png',
+                              height:
+                                  MediaQuery.sizeOf(context).height * 0.78,
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.high,
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -119,7 +180,8 @@ class _GameOverScreenState extends State<GameOverScreen> {
                       flex: 6,
                       child: _ResultsPanel(
                         score: resolvedScore,
-                        best: _best,
+                        best: best,
+                        coinsEarned: resolved.coinsEarned,
                         isNewHighScore: isNewHighScore,
                         onRestart: () {
                           Navigator.pushReplacementNamed(
@@ -128,9 +190,9 @@ class _GameOverScreenState extends State<GameOverScreen> {
                           );
                         },
                         onHome: () {
-                          Navigator.pushReplacementNamed(
-                            context,
+                          Navigator.of(context).pushNamedAndRemoveUntil(
                             AppRoutes.home,
+                            (route) => false,
                           );
                         },
                       ),
@@ -150,6 +212,7 @@ class _ResultsPanel extends StatelessWidget {
   const _ResultsPanel({
     required this.score,
     required this.best,
+    required this.coinsEarned,
     required this.isNewHighScore,
     required this.onRestart,
     required this.onHome,
@@ -157,6 +220,7 @@ class _ResultsPanel extends StatelessWidget {
 
   final int score;
   final int best;
+  final int coinsEarned;
   final bool isNewHighScore;
   final VoidCallback onRestart;
   final VoidCallback onHome;
@@ -239,6 +303,31 @@ class _ResultsPanel extends StatelessWidget {
             ),
           ],
         ),
+        if (coinsEarned > 0) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/images/coin.png',
+                width: 18,
+                height: 18,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '+$coinsEarned coins',
+                style: GoogleFonts.baloo2(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFFFFD27A),
+                  height: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 22),
         Row(
           children: [

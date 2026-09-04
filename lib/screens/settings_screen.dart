@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
+import 'package:runners_rush/services/audio_service.dart';
 import 'package:runners_rush/services/settings_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -124,9 +125,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   icon: Icons.music_note_rounded,
                                   label: 'Background Music',
                                   value: _backgroundMusic,
-                                  onChanged: (value) {
+                                  onChanged: (value) async {
                                     setState(() => _backgroundMusic = value);
-                                    SettingsService.setMusicEnabled(value);
+                                    await AudioService.setMusicEnabled(value);
                                   },
                                 ),
                                 const SizedBox(height: 10),

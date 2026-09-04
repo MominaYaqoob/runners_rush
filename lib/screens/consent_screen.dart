@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
+import 'package:runners_rush/services/onboarding_service.dart';
 
 class ConsentScreen extends StatefulWidget {
   const ConsentScreen({super.key});
@@ -95,8 +96,10 @@ class _ConsentScreenState extends State<ConsentScreen> {
     );
   }
 
-  void _continue() {
+  Future<void> _continue() async {
     if (!_agreed) return;
+    await OnboardingService.markConsentAccepted();
+    if (!mounted) return;
     Navigator.pushReplacementNamed(context, AppRoutes.home);
   }
 

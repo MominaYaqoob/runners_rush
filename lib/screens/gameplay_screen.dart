@@ -61,7 +61,10 @@ class _GameplayScreenState extends State<GameplayScreen> {
   void _onHome() {
     _game.pauseEngine();
     setState(() => _isPaused = false);
-    Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.home,
+      (route) => false,
+    );
   }
 
   @override
