@@ -8,6 +8,7 @@ import 'package:runners_rush/screens/consent_screen.dart';
 import 'package:runners_rush/screens/home_screen.dart';
 import 'package:runners_rush/screens/onboarding_screen.dart';
 import 'package:runners_rush/services/onboarding_service.dart';
+import 'package:runners_rush/services/shop_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -27,6 +28,8 @@ class _SplashScreenState extends State<SplashScreen>
     systemNavigationBarDividerColor: Colors.transparent,
   );
 
+  static const _defaultBackgroundAsset =
+      'assets/images/background_evening.png';
   static const _introDuration = Duration(seconds: 3);
   static const _navigateAfter = Duration(seconds: 5);
   static const _routeFadeDuration = Duration(milliseconds: 600);
@@ -40,10 +43,13 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _titleOpacity;
   late final Animation<double> _taglineOpacity;
 
+  String _backgroundAsset = _defaultBackgroundAsset;
+
   @override
   void initState() {
     super.initState();
     _setEdgeToEdge();
+    _loadBackground();
 
     _introController = AnimationController(
       vsync: this,
@@ -80,6 +86,14 @@ class _SplashScreenState extends State<SplashScreen>
 
     _introController.forward();
     _navigationTimer = Timer(_navigateAfter, _continueAfterSplash);
+  }
+
+  Future<void> _loadBackground() async {
+    final path = await ShopService.getSelectedBackgroundAssetPath();
+    if (!mounted) return;
+    final asset = 'assets/images/$path';
+    if (asset == _backgroundAsset) return;
+    setState(() => _backgroundAsset = asset);
   }
 
   Future<void> _setEdgeToEdge() async {
@@ -156,7 +170,7 @@ class _SplashScreenState extends State<SplashScreen>
           fit: StackFit.expand,
           children: [
             Image.asset(
-              'assets/images/background_evening.png',
+              _backgroundAsset,
               fit: BoxFit.cover,
             ),
             const DecoratedBox(

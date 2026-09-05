@@ -27,6 +27,7 @@ class _ShopScreenState extends State<ShopScreen> {
 
   String _selectedId = CharacterService.male;
   String _selectedBackgroundId = ShopService.eveningId;
+  String _backgroundAsset = 'assets/images/background_evening.png';
   int _coins = 0;
   Set<String> _unlocked = {CharacterService.male};
   Set<String> _unlockedBackgrounds = {ShopService.eveningId};
@@ -53,6 +54,7 @@ class _ShopScreenState extends State<ShopScreen> {
           unlockedSet.contains(selected) ? selected : CharacterService.male;
       _unlockedBackgrounds = unlockedBgs;
       _selectedBackgroundId = selectedBg;
+      _backgroundAsset = ShopService.backgroundById(selectedBg).flutterAsset;
     });
   }
 
@@ -94,7 +96,10 @@ class _ShopScreenState extends State<ShopScreen> {
     if (_unlockedBackgrounds.contains(bg.id)) {
       await ShopService.setSelectedBackground(bg.id);
       if (!mounted) return;
-      setState(() => _selectedBackgroundId = bg.id);
+      setState(() {
+        _selectedBackgroundId = bg.id;
+        _backgroundAsset = bg.flutterAsset;
+      });
       return;
     }
 
@@ -112,6 +117,7 @@ class _ShopScreenState extends State<ShopScreen> {
       _coins = coins;
       _unlockedBackgrounds = unlocked;
       _selectedBackgroundId = bg.id;
+      _backgroundAsset = bg.flutterAsset;
     });
   }
 
@@ -133,7 +139,7 @@ class _ShopScreenState extends State<ShopScreen> {
           fit: StackFit.expand,
           children: [
             Image.asset(
-              'assets/images/background_evening.png',
+              _backgroundAsset,
               fit: BoxFit.cover,
             ),
             const ColoredBox(color: Color(0x66000000)),

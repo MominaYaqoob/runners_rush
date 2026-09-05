@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:runners_rush/app_routes.dart';
@@ -15,12 +17,15 @@ import 'package:runners_rush/services/settings_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);
+  try {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  } catch (_) {}
   await SettingsService.init();
-  await AudioService.init();
+  // Fire-and-forget: BGM must not block first frame (esp. Chrome/web).
+  unawaited(AudioService.init());
   runApp(const RunnersRushApp());
 }
 

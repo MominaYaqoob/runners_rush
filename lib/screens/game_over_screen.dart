@@ -5,6 +5,7 @@ import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/audio_service.dart';
 import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/score_service.dart';
+import 'package:runners_rush/services/shop_service.dart';
 
 class GameOverScreen extends StatefulWidget {
   const GameOverScreen({
@@ -37,8 +38,12 @@ class GameOverScreen extends StatefulWidget {
 }
 
 class _GameOverScreenState extends State<GameOverScreen> {
+  static const _defaultBackgroundAsset =
+      'assets/images/background_evening.png';
+
   int? _fallbackBest;
   String _character = CharacterService.male;
+  String _backgroundAsset = _defaultBackgroundAsset;
 
   @override
   void initState() {
@@ -51,12 +56,21 @@ class _GameOverScreenState extends State<GameOverScreen> {
 
   Future<void> _hydrateFromRoute() async {
     final resolved = _resolveArgs();
+    final bgPath = await ShopService.getSelectedBackgroundAssetPath();
+    if (!mounted) return;
+
     if (resolved.hasCharacter) {
-      setState(() => _character = resolved.character);
+      setState(() {
+        _character = resolved.character;
+        _backgroundAsset = 'assets/images/$bgPath';
+      });
     } else {
       final value = await CharacterService.getSelectedCharacter();
       if (!mounted) return;
-      setState(() => _character = value);
+      setState(() {
+        _character = value;
+        _backgroundAsset = 'assets/images/$bgPath';
+      });
     }
 
     if (resolved.hasBest) return;
@@ -135,7 +149,7 @@ class _GameOverScreenState extends State<GameOverScreen> {
           fit: StackFit.expand,
           children: [
             Image.asset(
-              'assets/images/background_evening.png',
+              _backgroundAsset,
               fit: BoxFit.cover,
             ),
             const DecoratedBox(

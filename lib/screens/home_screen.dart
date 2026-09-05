@@ -54,8 +54,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static const _maleAsset = 'assets/images/male_run.png';
   static const _femaleAsset = 'assets/images/female_run.png';
+  static const _defaultBackgroundAsset =
+      'assets/images/background_evening.png';
 
   String _selectedCharacter = _maleAsset;
+  String _backgroundAsset = _defaultBackgroundAsset;
   bool _soundOn = true;
   int _highScore = 0;
   int _coins = 0;
@@ -74,14 +77,23 @@ class _HomeScreenState extends State<HomeScreen> {
     await SettingsService.init();
     await AudioService.init();
     final character = await CharacterService.getSelectedCharacter();
+    final unlocked = await ShopService.getUnlockedCharacters();
+    final backgroundPath =
+        await ShopService.getSelectedBackgroundAssetPath();
     if (!mounted) return;
+    final femaleOk = unlocked.contains(CharacterService.female);
+    final useFemale =
+        character == CharacterService.female && femaleOk;
     setState(() {
       _highScore = highScore;
       _coins = coins;
       _soundOn = SettingsService.soundEffectsEnabled;
-      _selectedCharacter =
-          character == CharacterService.female ? _femaleAsset : _maleAsset;
+      _selectedCharacter = useFemale ? _femaleAsset : _maleAsset;
+      _backgroundAsset = 'assets/images/$backgroundPath';
     });
+    if (character == CharacterService.female && !femaleOk) {
+      await CharacterService.setSelectedCharacter(CharacterService.male);
+    }
   }
 
   Future<void> _openAndRefresh(String routeName) async {
@@ -115,7 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
           fit: StackFit.expand,
           children: [
             Image.asset(
-              'assets/images/background_evening.png',
+              _backgroundAsset,
               fit: BoxFit.cover,
             ),
             const ColoredBox(color: Color(0x4D000000)),
@@ -537,12 +549,49 @@ class _CharacterSelectDialog extends StatefulWidget {
 
 class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
   late String _pendingAsset = widget.selectedAsset;
+  bool _femaleUnlocked = false;
+  bool _loaded = false;
+  String? _hint;
+
+  int get _femalePrice =>
+      ShopService.characterById(CharacterService.female).price;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUnlocks();
+  }
+
+  Future<void> _loadUnlocks() async {
+    final unlocked = await ShopService.getUnlockedCharacters();
+    if (!mounted) return;
+    final femaleOk = unlocked.contains(CharacterService.female);
+    setState(() {
+      _femaleUnlocked = femaleOk;
+      _loaded = true;
+      if (!femaleOk &&
+          _pendingAsset == _CharacterSelectDialog.femaleAsset) {
+        _pendingAsset = _CharacterSelectDialog.maleAsset;
+      }
+    });
+  }
+
+  void _onFemaleTap() {
+    if (!_femaleUnlocked) {
+      setState(() => _hint = 'Unlock in Shop first');
+      return;
+    }
+    setState(() {
+      _hint = null;
+      _pendingAsset = _CharacterSelectDialog.femaleAsset;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: BackdropFilter(
@@ -562,7 +611,8 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
                 ),
               ],
             ),
-            child: Column(
+            child: SingleChildScrollView(
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
@@ -574,7 +624,7 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
                     height: 1.1,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -583,8 +633,10 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
                         label: 'Explorer Male',
                         selected:
                             _pendingAsset == _CharacterSelectDialog.maleAsset,
+                        locked: false,
                         onTap: () {
                           setState(() {
+                            _hint = null;
                             _pendingAsset = _CharacterSelectDialog.maleAsset;
                           });
                         },
@@ -597,16 +649,29 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
                         label: 'Explorer Female',
                         selected: _pendingAsset ==
                             _CharacterSelectDialog.femaleAsset,
-                        onTap: () {
-                          setState(() {
-                            _pendingAsset = _CharacterSelectDialog.femaleAsset;
-                          });
-                        },
+                        locked: _loaded && !_femaleUnlocked,
+                        priceLabel: _loaded && !_femaleUnlocked
+                            ? '$_femalePrice 🪙'
+                            : null,
+                        onTap: _onFemaleTap,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
+                if (_hint != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _hint!,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.baloo2(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFFFFD27A),
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
                 GestureDetector(
                   onTap: () => Navigator.of(context).pop(_pendingAsset),
                   child: Container(
@@ -619,7 +684,8 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF6B3FA0).withValues(alpha: 0.45),
+                          color:
+                              const Color(0xFF6B3FA0).withValues(alpha: 0.45),
                           blurRadius: 14,
                           offset: const Offset(0, 4),
                         ),
@@ -640,6 +706,7 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
                 ),
               ],
             ),
+            ),
           ),
         ),
       ),
@@ -653,11 +720,15 @@ class _CharacterOption extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.locked = false,
+    this.priceLabel,
   });
 
   final String asset;
   final String label;
   final bool selected;
+  final bool locked;
+  final String? priceLabel;
   final VoidCallback onTap;
 
   static const _glow = Color(0xFFFF8A3D);
@@ -666,58 +737,94 @@ class _CharacterOption extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          color: Colors.white.withValues(alpha: selected ? 0.12 : 0.08),
-          border: Border.all(
-            color: selected ? _glow : Colors.white.withValues(alpha: 0.2),
-            width: selected ? 3 : 1,
+      child: Opacity(
+        opacity: locked ? 0.5 : 1,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: Colors.white.withValues(alpha: selected ? 0.12 : 0.08),
+            border: Border.all(
+              color: selected ? _glow : Colors.white.withValues(alpha: 0.2),
+              width: selected ? 3 : 1,
+            ),
+            boxShadow: selected && !locked
+                ? [
+                    BoxShadow(
+                      color: _glow.withValues(alpha: 0.62),
+                      blurRadius: 18,
+                      spreadRadius: 1,
+                    ),
+                    BoxShadow(
+                      color: const Color(0xFFFFC857).withValues(alpha: 0.28),
+                      blurRadius: 28,
+                    ),
+                  ]
+                : const [
+                    BoxShadow(
+                      color: Color(0x59000000),
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
           ),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: _glow.withValues(alpha: 0.62),
-                    blurRadius: 18,
-                    spreadRadius: 1,
-                  ),
-                  BoxShadow(
-                    color: const Color(0xFFFFC857).withValues(alpha: 0.28),
-                    blurRadius: 28,
-                  ),
-                ]
-              : const [
-                  BoxShadow(
-                    color: Color(0x59000000),
-                    blurRadius: 12,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-        ),
-        child: Column(
-          children: [
-            SizedBox(
-              height: 110,
-              child: Image.asset(
-                asset,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
+          child: Column(
+            children: [
+              SizedBox(
+                height: 96,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Image.asset(
+                      asset,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
+                      height: 96,
+                    ),
+                    if (locked)
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black.withValues(alpha: 0.55),
+                        ),
+                        child: const Icon(
+                          Icons.lock_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.baloo2(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                height: 1.1,
+              const SizedBox(height: 6),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.baloo2(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  height: 1.1,
+                ),
               ),
-            ),
-          ],
+              if (priceLabel != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  priceLabel!,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFFFFD27A),
+                    height: 1.1,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

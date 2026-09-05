@@ -162,17 +162,23 @@ void main() {
 
     await tester.tap(find.text('Character'));
     await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('Choose Character'), findsOneWidget);
     expect(find.text('Explorer Male'), findsOneWidget);
     expect(find.text('Explorer Female'), findsOneWidget);
+    expect(find.textContaining('275'), findsOneWidget);
+    expect(find.byIcon(Icons.lock_rounded), findsOneWidget);
+
     await tester.tap(find.text('Explorer Female'));
     await tester.pump();
-    expect(find.text('Choose Character'), findsOneWidget);
+    expect(find.text('Unlock in Shop first'), findsOneWidget);
     expect(_homePreviewAsset(tester), 'assets/images/male_run.png');
+    await tester.ensureVisible(find.text('Confirm'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Confirm'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('Choose Character'), findsNothing);
-    expect(_homePreviewAsset(tester), 'assets/images/female_run.png');
+    expect(_homePreviewAsset(tester), 'assets/images/male_run.png');
 
     await tester.tap(find.text('PLAY'));
     await tester.pump();

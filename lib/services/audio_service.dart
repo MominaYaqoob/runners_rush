@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flame_audio/flame_audio.dart';
 import 'package:flutter/widgets.dart';
 import 'package:runners_rush/services/settings_service.dart';
@@ -28,12 +30,20 @@ class AudioService {
     _ensurePrefix();
     await SettingsService.init();
     if (_inWidgetTest) return;
-    await _ensureBgm();
-    if (shouldPlayMusic) {
-      await playBgm();
-    } else {
-      await stopBgm();
-    }
+    // Web autoplay policies can hang forever if we await BGM here —
+    // never block app startup on audio.
+    unawaited(_startBgmInBackground());
+  }
+
+  static Future<void> _startBgmInBackground() async {
+    try {
+      await _ensureBgm();
+      if (shouldPlayMusic) {
+        await playBgm();
+      } else {
+        await stopBgm();
+      }
+    } catch (_) {}
   }
 
   static void play(String file) {
