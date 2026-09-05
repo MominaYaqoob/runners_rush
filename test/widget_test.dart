@@ -151,7 +151,7 @@ void main() {
 
     expect(find.text('PLAY'), findsOneWidget);
     expect(find.text('Tap to select character'), findsOneWidget);
-    expect(_homePreviewAsset(tester), 'assets/images/male_run.png');
+    expect(_homePreviewAsset(tester), 'assets/images/home_male_hero.png');
 
     await tester.tap(find.textContaining('High Score'));
     await tester.pump();
@@ -166,19 +166,19 @@ void main() {
     expect(find.text('Choose Character'), findsOneWidget);
     expect(find.text('Explorer Male'), findsOneWidget);
     expect(find.text('Explorer Female'), findsOneWidget);
-    expect(find.textContaining('275'), findsOneWidget);
+    expect(find.textContaining('10'), findsOneWidget);
     expect(find.byIcon(Icons.lock_rounded), findsOneWidget);
 
     await tester.tap(find.text('Explorer Female'));
     await tester.pump();
     expect(find.text('Unlock in Shop first'), findsOneWidget);
-    expect(_homePreviewAsset(tester), 'assets/images/male_run.png');
+    expect(_homePreviewAsset(tester), 'assets/images/home_male_hero.png');
     await tester.ensureVisible(find.text('Confirm'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Confirm'));
     await tester.pumpAndSettle();
     expect(find.text('Choose Character'), findsNothing);
-    expect(_homePreviewAsset(tester), 'assets/images/male_run.png');
+    expect(_homePreviewAsset(tester), 'assets/images/home_male_hero.png');
 
     await tester.tap(find.text('PLAY'));
     await tester.pump();
@@ -364,15 +364,15 @@ void main() {
     expect(find.text('Owned'), findsAtLeastNWidgets(1));
     expect(find.text('Selected'), findsAtLeastNWidgets(1));
     expect(find.text('Buy'), findsWidgets);
-    expect(find.text('275'), findsOneWidget);
+    expect(find.text('10'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('275'));
+    await tester.ensureVisible(find.text('10'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Buy').first);
     await tester.pumpAndSettle();
     expect(find.text('Selected'), findsAtLeastNWidgets(1));
     expect(find.text('Owned'), findsAtLeastNWidgets(2));
-    expect(find.text('275'), findsNothing);
+    expect(find.text('10'), findsNothing);
 
     await tester.tap(find.byIcon(Icons.arrow_back_rounded));
     await tester.pumpAndSettle();

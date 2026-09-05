@@ -30,7 +30,9 @@ class RunnersRushGame extends FlameGame
   static const flyingAtLeastEvery = 2;
 
   static const _groundSprites = [
-    'obstacle.png',
+    'obstacle_stone.png',
+    'obstacle_rocks.png',
+    'obstacle_stump.png',
     'obstacle_2.png',
   ];
   static const _flyingSprite = 'obstacle_flying.png';

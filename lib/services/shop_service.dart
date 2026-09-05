@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:runners_rush/services/character_service.dart';
 
@@ -53,14 +54,14 @@ class ShopService {
     ShopCharacter(
       id: CharacterService.male,
       name: 'Explorer Male',
-      assetPath: 'assets/images/male_run.png',
+      assetPath: 'assets/images/shop_male_portrait.png',
       price: 0,
     ),
     ShopCharacter(
       id: CharacterService.female,
       name: 'Explorer Female',
-      assetPath: 'assets/images/female_run.png',
-      price: 275,
+      assetPath: 'assets/images/shop_female_portrait.png',
+      price: 10,
     ),
   ];
 
@@ -84,42 +85,42 @@ class ShopService {
       name: 'Morning',
       assetPath: 'background_morning.png',
       groundAssetPath: defaultGroundAssetPath,
-      price: 100,
+      price: 5,
     ),
     ShopBackground(
       id: 'day',
       name: 'Day',
       assetPath: 'background_day.png',
       groundAssetPath: defaultGroundAssetPath,
-      price: 150,
+      price: 6,
     ),
     ShopBackground(
       id: 'night',
       name: 'Night',
       assetPath: 'background_night.png',
       groundAssetPath: 'ground_night.png',
-      price: 200,
+      price: 7,
     ),
     ShopBackground(
       id: 'autumn',
       name: 'Autumn',
       assetPath: 'background_autumn.png',
       groundAssetPath: 'ground_autumn.png',
-      price: 220,
+      price: 8,
     ),
     ShopBackground(
       id: 'rain',
       name: 'Rain',
       assetPath: 'background_rain.png',
       groundAssetPath: 'ground_rain.png',
-      price: 250,
+      price: 9,
     ),
     ShopBackground(
       id: 'snow',
       name: 'Snow',
       assetPath: 'background_snow.png',
       groundAssetPath: 'ground_snow.png',
-      price: 300,
+      price: 10,
     ),
   ];
 
@@ -229,12 +230,20 @@ class ShopService {
   }
 
   static Future<String> getSelectedBackground() async {
+    debugPrint(
+      '[SHOP_SERVICE] getSelectedBackground called, stored id will be checked',
+    );
     final prefs = await SharedPreferences.getInstance();
     final id = prefs.getString(_selectedBackgroundKey);
-    if (id == null || id.isEmpty) return eveningId;
-    final unlocked = await getUnlockedBackgrounds();
-    if (!unlocked.contains(id)) return eveningId;
-    return id;
+    final String result;
+    if (id == null || id.isEmpty) {
+      result = eveningId;
+    } else {
+      final unlocked = await getUnlockedBackgrounds();
+      result = unlocked.contains(id) ? id : eveningId;
+    }
+    debugPrint('[SHOP_SERVICE] getSelectedBackground final id=$result');
+    return result;
   }
 
   /// Flame image path for the currently selected background.

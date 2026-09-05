@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:runners_rush/game/hitbox_debug.dart';
@@ -5,7 +7,8 @@ import 'package:runners_rush/game/player_component.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
 
 /// Scrolling hazard. Ground sprites sit on [PlayerComponent] ground; flying
-/// ones sit at chest height so the runner must jump.
+/// ones pass just above a standing runner (Chrome-dino style) — run ducks
+/// under, jump clips the shaft.
 class ObstacleComponent extends SpriteComponent
     with CollisionCallbacks, HasGameReference<RunnersRushGame> {
   ObstacleComponent({
@@ -14,20 +17,19 @@ class ObstacleComponent extends SpriteComponent
     this.speed = RunnersRushGame.initialSpeed,
   });
 
-  static const sizeScale = 0.42;
-  static const groundHeightRatio = 0.22 * sizeScale;
-  static const bushHeightRatio = 0.24 * sizeScale;
-  /// Arrow height vs screen — large enough to read, short enough to jump over.
-  static const flyingHeightRatio = 0.078;
-  /// Hitbox center as a fraction of player height above the feet (chest).
-  /// High enough that a standing runner always hits; well below jump peak.
-  static const flyingCenterFromPlayerFeet = 0.52;
+  static const sizeScale = 0.55;
+  static const groundHeightRatio = 0.24 * sizeScale;
+  static const bushHeightRatio = 0.26 * sizeScale;
+  /// Small flying arrow.
+  static const flyingHeightRatio = 0.055;
+  /// Above the head so a run clears; jump still clips the shaft.
+  static const flyingCenterFromPlayerFeet = 1.08;
   static const flyingSpeedMultiplier = 1.4;
   static final hitboxScale = Vector2(0.50, 0.50);
   /// Hitbox center, as a fraction of sprite height above the feet.
   static const hitboxCenterYFromFeet = 0.40;
-  /// Thin shaft only — feathers, trail particles, and padding stay out of the box.
-  static final flyingHitboxScale = Vector2(0.40, 0.18);
+  /// Shaft-focused box — tall enough to catch a rising jump.
+  static final flyingHitboxScale = Vector2(0.42, 0.38);
   static const flyingHitboxCenterYFromFeet = 0.50;
   /// Centered on the shaft (sprite-local). Flip mirrors it toward the runner.
   static const flyingHitboxCenterX = 0.04;
@@ -62,7 +64,7 @@ class ObstacleComponent extends SpriteComponent
     );
   }
 
-  /// Sprite bottom Y so the shaft sits on the standing runner's chest.
+  /// Sprite bottom Y so the shaft sits just above a standing runner.
   static double flyingBottomY(double screenHeight, double obstacleHeight) {
     final groundY = screenHeight * (1 - PlayerComponent.groundHeightRatio);
     final playerH = screenHeight * PlayerComponent.heightRatio;
@@ -99,6 +101,7 @@ class ObstacleComponent extends SpriteComponent
     await super.onLoad();
     sprite = await game.loadSprite(spritePath);
     anchor = Anchor.bottomCenter;
+    paint.filterQuality = FilterQuality.medium;
     _layout();
     position = Vector2(game.size.x + width / 2, _spawnY);
     if (flying) {
@@ -112,6 +115,56 @@ class ObstacleComponent extends SpriteComponent
     );
     HitboxDebug.apply(box, HitboxDebug.obstacleColor);
     await add(box);
+  }
+
+  /// Thin soft light rim so hazards stay readable on busy jungle backdrops.
+  @override
+  void render(Canvas canvas) {
+    final s = sprite;
+    if (s != null) {
+      final cx = size.x / 2;
+      final cy = size.y;
+      _paintRim(
+        canvas,
+        s,
+        scale: 1.06,
+        blur: 3.5,
+        tint: const Color(0xB3FFF8E7),
+        cx: cx,
+        cy: cy,
+      );
+      _paintRim(
+        canvas,
+        s,
+        scale: 1.03,
+        blur: 1.5,
+        tint: const Color(0xE6FFEFC2),
+        cx: cx,
+        cy: cy,
+      );
+    }
+    super.render(canvas);
+  }
+
+  void _paintRim(
+    Canvas canvas,
+    Sprite s, {
+    required double scale,
+    required double blur,
+    required Color tint,
+    required double cx,
+    required double cy,
+  }) {
+    final paint = Paint()
+      ..filterQuality = FilterQuality.medium
+      ..colorFilter = ColorFilter.mode(tint, BlendMode.srcATop)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur);
+    canvas.save();
+    canvas.translate(cx, cy);
+    canvas.scale(scale);
+    canvas.translate(-cx, -cy);
+    s.render(canvas, size: size, overridePaint: paint);
+    canvas.restore();
   }
 
   @override
@@ -134,7 +187,12 @@ class ObstacleComponent extends SpriteComponent
 
   double get _heightRatio {
     if (flying) return flyingHeightRatio;
-    if (spritePath.contains('obstacle_2')) return bushHeightRatio;
+    // Taller silhouettes (bush / stump / rock pile).
+    if (spritePath.contains('obstacle_2') ||
+        spritePath.contains('obstacle_stump') ||
+        spritePath.contains('obstacle_rocks')) {
+      return bushHeightRatio;
+    }
     return groundHeightRatio;
   }
 

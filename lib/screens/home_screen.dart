@@ -142,7 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       right: 0,
                       bottom: 48,
                       child: _CharacterPreview(
-                        asset: _selectedCharacter,
+                        selectedAsset: _selectedCharacter,
                         onTap: _openCharacterSelect,
                       ),
                     ),
@@ -329,16 +329,22 @@ class _CoinsBadge extends StatelessWidget {
 
 class _CharacterPreview extends StatelessWidget {
   const _CharacterPreview({
-    required this.asset,
+    required this.selectedAsset,
     required this.onTap,
   });
 
-  final String asset;
+  final String selectedAsset;
   final VoidCallback onTap;
+
+  static const _maleHero = 'assets/images/home_male_hero.png';
+  static const _femaleIdle = 'assets/images/female_idle_1.png';
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
+    final isMale = selectedAsset.contains('male_');
+    final asset = isMale ? _maleHero : _femaleIdle;
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.translucent,
@@ -347,15 +353,16 @@ class _CharacterPreview extends StatelessWidget {
         children: [
           ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: size.height * 0.58,
-              maxWidth: size.width * 0.44,
+              maxHeight: size.height * 0.72,
+              maxWidth: size.width * 0.42,
             ),
             child: Image.asset(
               asset,
               key: const ValueKey('home-character-preview'),
               fit: BoxFit.contain,
               alignment: Alignment.bottomCenter,
-              filterQuality: FilterQuality.high,
+              filterQuality:
+                  isMale ? FilterQuality.high : FilterQuality.none,
             ),
           ),
           const SizedBox(height: 4),
@@ -542,6 +549,8 @@ class _CharacterSelectDialog extends StatefulWidget {
 
   static const maleAsset = 'assets/images/male_run.png';
   static const femaleAsset = 'assets/images/female_run.png';
+  static const malePreview = 'assets/images/male_idle_1.png';
+  static const femalePreview = 'assets/images/female_idle_1.png';
 
   @override
   State<_CharacterSelectDialog> createState() => _CharacterSelectDialogState();
@@ -629,7 +638,7 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
                   children: [
                     Expanded(
                       child: _CharacterOption(
-                        asset: _CharacterSelectDialog.maleAsset,
+                        asset: _CharacterSelectDialog.malePreview,
                         label: 'Explorer Male',
                         selected:
                             _pendingAsset == _CharacterSelectDialog.maleAsset,
@@ -645,7 +654,7 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
                     const SizedBox(width: 14),
                     Expanded(
                       child: _CharacterOption(
-                        asset: _CharacterSelectDialog.femaleAsset,
+                        asset: _CharacterSelectDialog.femalePreview,
                         label: 'Explorer Female',
                         selected: _pendingAsset ==
                             _CharacterSelectDialog.femaleAsset,
@@ -779,7 +788,7 @@ class _CharacterOption extends StatelessWidget {
                     Image.asset(
                       asset,
                       fit: BoxFit.contain,
-                      filterQuality: FilterQuality.high,
+                      filterQuality: FilterQuality.none,
                       height: 96,
                     ),
                     if (locked)

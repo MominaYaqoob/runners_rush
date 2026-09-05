@@ -7,15 +7,15 @@ import 'package:runners_rush/game/runners_rush_game.dart';
 /// Matches [obstacle_flying.png] (895x251).
 const _flyingAspect = 895 / 251;
 
-/// Matches [obstacle.png] (752x298).
-const _groundAspect = 752 / 298;
+/// Matches [obstacle_stone.png] (~819x364).
+const _groundAspect = 819 / 364;
 
 void main() {
-  test('jump peak is about 302px from velocity and gravity', () {
-    expect(PlayerComponent.jumpPeakHeight, closeTo(301.89, 0.05));
+  test('jump peak is about 170px from velocity and gravity', () {
+    expect(PlayerComponent.jumpPeakHeight, closeTo(169.81, 0.05));
   });
 
-  test('flying hitbox overlaps standing chest and sits below jump peak at 800x360', () {
+  test('flying sits above standing run; jump path crosses the shaft at 800x360', () {
     const h = 360.0;
     final groundY = h * (1 - PlayerComponent.groundHeightRatio);
     final playerH = h * PlayerComponent.heightRatio;
@@ -34,11 +34,13 @@ void main() {
       flying: true,
     );
     final peakBottom = PlayerComponent.jumpPeakHitboxBottom(h);
+    final flyingBottom = ObstacleComponent.flyingHitboxBottom(h, obsH);
     final flyingTop = ObstacleComponent.flyingHitboxTop(h, obsH);
 
-    expect(standing.overlaps(flying), isTrue);
+    expect(standing.overlaps(flying), isFalse);
+    expect(flyingBottom, lessThan(standing.top));
+    // Peak goes above the shaft; ascent/descent still crosses its band.
     expect(peakBottom, lessThan(flyingTop));
-    expect(flyingTop - peakBottom, greaterThan(80));
   });
 
   test('speed rises 20 every 10 seconds and caps at 500', () {
@@ -60,21 +62,7 @@ void main() {
     _Size(844, 390),
     _Size(915, 412),
   ]) {
-    test('jump peak clears flying arrow at ${size.w.toInt()}x${size.h.toInt()}', () {
-      final obsH = size.h * ObstacleComponent.flyingHeightRatio;
-      final flyingTop = ObstacleComponent.flyingHitboxTop(size.h, obsH);
-      final peakBottom = PlayerComponent.jumpPeakHitboxBottom(size.h);
-
-      expect(
-        peakBottom,
-        lessThan(flyingTop),
-        reason:
-            'jump peak must go over the shaft: peakBottom=$peakBottom '
-            'flyingTop=$flyingTop',
-      );
-    });
-
-    test('running hits flying arrow at ${size.w.toInt()}x${size.h.toInt()}', () {
+    test('running clears flying arrow at ${size.w.toInt()}x${size.h.toInt()}', () {
       final result = _simulate(
         size: size,
         jumpLeadSeconds: null,
@@ -82,24 +70,51 @@ void main() {
       );
       expect(
         result.hit,
-        isTrue,
+        isFalse,
         reason:
-            'running should hit flying at ${size.w}x${size.h}: ${result.debug}',
+            'running should duck under flying at ${size.w}x${size.h}: ${result.debug}',
       );
     });
 
-    test('timed jump clears flying arrow at ${size.w.toInt()}x${size.h.toInt()}', () {
-      final result = _simulate(
-        size: size,
-        jumpLeadSeconds: 0.28,
-        flying: true,
-      );
+    test('timed jump hits flying arrow at ${size.w.toInt()}x${size.h.toInt()}', () {
+      // Try a few leads — contact must happen during ascent through the shaft.
+      var hit = false;
+      String debug = '';
+      for (final lead in const [0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20, 0.22]) {
+        final result = _simulate(
+          size: size,
+          jumpLeadSeconds: lead,
+          flying: true,
+        );
+        debug = result.debug;
+        if (result.hit) {
+          hit = true;
+          break;
+        }
+      }
       expect(
-        result.hit,
-        isFalse,
+        hit,
+        isTrue,
         reason:
-            'jump should go over flying at ${size.w}x${size.h}: ${result.debug}',
+            'jump should hit overhead flying at ${size.w}x${size.h}: $debug',
       );
+    });
+
+    test('jump peak clears flying arrow band check at ${size.w.toInt()}x${size.h.toInt()}', () {
+      final obsH = size.h * ObstacleComponent.flyingHeightRatio;
+      final flyingTop = ObstacleComponent.flyingHitboxTop(size.h, obsH);
+      final flyingBottom = ObstacleComponent.flyingHitboxBottom(size.h, obsH);
+      final peakBottom = PlayerComponent.jumpPeakHitboxBottom(size.h);
+      final groundY = size.h * (1 - PlayerComponent.groundHeightRatio);
+      final playerH = size.h * PlayerComponent.heightRatio;
+      final standing = _playerAabb(
+        cx: 0,
+        bottom: groundY,
+        spriteSize: Vector2(playerH, playerH),
+      );
+
+      expect(flyingBottom, lessThan(standing.top));
+      expect(peakBottom, lessThan(flyingTop));
     });
 
     test('timed jump clears ground obstacle at ${size.w.toInt()}x${size.h.toInt()}', () {

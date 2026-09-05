@@ -38,17 +38,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   static const _slides = [
     _OnboardingSlide(
-      imageAsset: 'assets/images/male_run.png',
+      imageAsset: 'assets/images/onboarding_1_run.png',
       heading: 'Run & Escape',
       subtext: 'Dash through the wild and dodge every obstacle in your path',
     ),
     _OnboardingSlide(
-      imageAsset: 'assets/images/male_jump.png',
+      imageAsset: 'assets/images/onboarding_2_jump.png',
       heading: 'Jump at the Right Time',
       subtext: 'Tap to leap over obstacles — timing is everything',
     ),
     _OnboardingSlide(
-      imageAsset: 'assets/images/male_win.png',
+      imageAsset: 'assets/images/onboarding_3_win.png',
       heading: 'Beat Your High Score',
       subtext: 'Challenge yourself and climb to the top of the leaderboard',
     ),
@@ -247,108 +247,132 @@ class _SlidePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.sizeOf(context).height;
-
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 45,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: screenHeight * 0.52,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Pixel-art is ~120px intrinsic; scale to fill most of the slide
+          // (~2.5–3× the old 160px glow / tiny intrinsic render).
+          final illustrationHeight =
+              (constraints.maxHeight * 0.92).clamp(300.0, 560.0);
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                flex: 45,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: _SlideIllustration(
+                      asset: slide.imageAsset,
+                      height: illustrationHeight,
+                    ),
+                  ),
                 ),
-                child: _SlideIllustration(asset: slide.imageAsset),
               ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 55,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      slide.heading,
-                      style: GoogleFonts.baloo2(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        height: 1.2,
-                        shadows: const [
-                          Shadow(
-                            color: Color(0x99000000),
-                            blurRadius: 10,
-                            offset: Offset(0, 2),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 55,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4, right: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          slide.heading,
+                          style: GoogleFonts.baloo2(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            height: 1.2,
+                            shadows: const [
+                              Shadow(
+                                color: Color(0x99000000),
+                                blurRadius: 10,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 320),
-                      child: Text(
-                        slide.subtext,
-                        style: GoogleFonts.baloo2(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white.withValues(alpha: 0.85),
-                          height: 1.55,
                         ),
-                      ),
+                        const SizedBox(height: 14),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 320),
+                          child: Text(
+                            slide.subtext,
+                            style: GoogleFonts.baloo2(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.85),
+                              height: 1.55,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
 }
 
 class _SlideIllustration extends StatelessWidget {
-  const _SlideIllustration({required this.asset});
+  const _SlideIllustration({
+    required this.asset,
+    required this.height,
+  });
 
   final String asset;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Container(
-          width: 160,
-          height: 160,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
-                blurRadius: 36,
-                spreadRadius: 6,
-              ),
-              BoxShadow(
-                color: const Color(0xFFFF8A3D).withValues(alpha: 0.28),
-                blurRadius: 32,
-                spreadRadius: 2,
-              ),
-            ],
+    final glowSize = height * 0.72;
+
+    return SizedBox(
+      height: height,
+      width: double.infinity,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: glowSize,
+            height: glowSize,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  blurRadius: 40,
+                  spreadRadius: 8,
+                ),
+                BoxShadow(
+                  color: const Color(0xFFFF8A3D).withValues(alpha: 0.28),
+                  blurRadius: 36,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
           ),
-        ),
-        Image.asset(
-          asset,
-          fit: BoxFit.contain,
-        ),
-      ],
+          Image.asset(
+            asset,
+            height: height,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+            alignment: Alignment.center,
+          ),
+        ],
+      ),
     );
   }
 }

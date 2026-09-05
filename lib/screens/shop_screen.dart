@@ -55,6 +55,7 @@ class _ShopScreenState extends State<ShopScreen> {
       _unlockedBackgrounds = unlockedBgs;
       _selectedBackgroundId = selectedBg;
       _backgroundAsset = ShopService.backgroundById(selectedBg).flutterAsset;
+      debugPrint('[SHOP] selectedBg=$selectedBg, asset=$_backgroundAsset');
     });
   }
 

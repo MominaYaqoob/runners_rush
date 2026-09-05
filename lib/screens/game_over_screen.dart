@@ -73,6 +73,8 @@ class _GameOverScreenState extends State<GameOverScreen> {
       });
     }
 
+    debugPrint('[GAMEOVER] bgPath=$bgPath, finalAsset=$_backgroundAsset');
+
     if (resolved.hasBest) return;
     final value = await ScoreService.getHighScore();
     if (!mounted) return;
@@ -175,14 +177,14 @@ class _GameOverScreenState extends State<GameOverScreen> {
                         alignment: const Alignment(-0.15, 0.15),
                         child: Image.asset(
                           fallAsset,
-                          height: MediaQuery.sizeOf(context).height * 0.78,
+                          height: MediaQuery.sizeOf(context).height * 0.82,
                           fit: BoxFit.contain,
                           filterQuality: FilterQuality.high,
                           errorBuilder: (context, error, stackTrace) {
                             return Image.asset(
                               'assets/images/male_fall.png',
                               height:
-                                  MediaQuery.sizeOf(context).height * 0.78,
+                                  MediaQuery.sizeOf(context).height * 0.82,
                               fit: BoxFit.contain,
                               filterQuality: FilterQuality.high,
                             );

@@ -18,9 +18,10 @@ enum PlayerState { running, jumpStart, jumpAir, jumpLand }
 class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     with CollisionCallbacks, HasGameReference<RunnersRushGame> {
   static const gravity = 1060.0;
-  static const jumpVelocity = -800.0;
+  /// Tuned so peak stays on phone landscape (~170px rise), not off-screen.
+  static const jumpVelocity = -600.0;
   static const groundHeightRatio = 0.165;
-  static const heightRatio = 0.36;
+  static const heightRatio = 0.32;
   static const xRatio = 0.15;
   /// Tight box on the torso/legs so arms, scarf, and bag padding do not collide.
   static final hitboxScale = Vector2(0.50, 0.50);
@@ -63,9 +64,10 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
   /// Peak rise in pixels from [jumpVelocity] and [gravity] (Y-down world).
   static double get jumpPeakHeight =>
       jumpVelocity * jumpVelocity / (2 * gravity);
-  static const runStepTime = 0.055;
-  static const jumpStartDuration = 0.08;
-  static const jumpLandDuration = 0.08;
+  static const runStepTime = 0.08;
+  static const jumpStartDuration = 0.12;
+  static const jumpLandDuration = 0.14;
+  static const jumpAirStepTime = 0.08;
 
   static const _runFrameSuffixes = [
     'run_1.png',
@@ -76,6 +78,23 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     'run_6.png',
     'run_7.png',
     'run_8.png',
+  ];
+
+  static const _jumpStartSuffixes = [
+    'jump_1.png',
+    'jump_2.png',
+  ];
+
+  static const _jumpAirSuffixes = [
+    'jump_3.png',
+    'jump_4.png',
+    'jump_5.png',
+    'jump_6.png',
+  ];
+
+  static const _jumpLandSuffixes = [
+    'jump_7.png',
+    'jump_8.png',
   ];
 
   PlayerComponent() : super(anchor: Anchor.bottomCenter);
@@ -104,21 +123,9 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
             : CharacterService.male;
 
     final runSprites = await _loadRunSprites(prefix);
-    final jumpStart = await _loadPoseSprite(
-      prefix,
-      preferred: 'jump_start.png',
-      fallbacks: const ['jump.png', 'run.png'],
-    );
-    final jumpAir = await _loadPoseSprite(
-      prefix,
-      preferred: 'jump.png',
-      fallbacks: const ['jump_start.png', 'run.png'],
-    );
-    final jumpLand = await _loadPoseSprite(
-      prefix,
-      preferred: 'jump_land.png',
-      fallbacks: const ['jump.png', 'run.png'],
-    );
+    final jumpStartSprites = await _loadNamedSprites(prefix, _jumpStartSuffixes);
+    final jumpAirSprites = await _loadNamedSprites(prefix, _jumpAirSuffixes);
+    final jumpLandSprites = await _loadNamedSprites(prefix, _jumpLandSuffixes);
 
     animations = {
       PlayerState.running: SpriteAnimation.spriteList(
@@ -127,23 +134,24 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
         loop: true,
       ),
       PlayerState.jumpStart: SpriteAnimation.spriteList(
-        [jumpStart],
-        stepTime: jumpStartDuration,
+        jumpStartSprites,
+        stepTime: jumpStartDuration / jumpStartSprites.length,
         loop: false,
       ),
       PlayerState.jumpAir: SpriteAnimation.spriteList(
-        [jumpAir],
-        stepTime: 1,
+        jumpAirSprites,
+        stepTime: jumpAirStepTime,
+        loop: true,
       ),
       PlayerState.jumpLand: SpriteAnimation.spriteList(
-        [jumpLand],
-        stepTime: jumpLandDuration,
+        jumpLandSprites,
+        stepTime: jumpLandDuration / jumpLandSprites.length,
         loop: false,
       ),
     };
     current = PlayerState.running;
     playing = true;
-    paint.filterQuality = FilterQuality.high;
+    paint.filterQuality = FilterQuality.none;
     _layout();
     position = Vector2(_fixedX, groundY);
     _bodyHitbox = RectangleHitbox(
@@ -173,6 +181,13 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     velocityY += gravity * dt;
     position.y += velocityY * dt;
     position.x = _fixedX;
+
+    // Keep the sprite from leaving the top of phone landscape screens.
+    final minFeetY = height * 0.12;
+    if (position.y < minFeetY) {
+      position.y = minFeetY;
+      if (velocityY < 0) velocityY = 0;
+    }
 
     if (position.y >= groundY) {
       position.y = groundY;
@@ -280,6 +295,40 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
 
     final baseRun = '${prefix}_run.png';
     return [await game.loadSprite(baseRun)];
+  }
+
+  /// Load each named pose frame for [prefix]; if missing, fall back to a
+  /// single pose sprite for that character (never swap bodies).
+  Future<List<Sprite>> _loadNamedSprites(
+    String prefix,
+    List<String> suffixes,
+  ) async {
+    final frames = <Sprite>[];
+    for (final suffix in suffixes) {
+      final name = '${prefix}_$suffix';
+      if (prefix == CharacterService.male || await _hasImage(name)) {
+        try {
+          frames.add(await game.loadSprite(name));
+        } catch (_) {}
+      }
+    }
+    if (frames.isNotEmpty) return frames;
+
+    // Female (and any other char) may only ship single jump poses.
+    final preferred = switch (suffixes.first) {
+      final s when s.startsWith('jump_1') || s.startsWith('jump_2') =>
+        'jump_start.png',
+      final s when s.startsWith('jump_7') || s.startsWith('jump_8') =>
+        'jump_land.png',
+      _ => 'jump.png',
+    };
+    return [
+      await _loadPoseSprite(
+        prefix,
+        preferred: preferred,
+        fallbacks: const ['jump.png', 'jump_start.png', 'run.png'],
+      ),
+    ];
   }
 
   Future<Sprite> _loadPoseSprite(
