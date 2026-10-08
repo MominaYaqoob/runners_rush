@@ -10,11 +10,19 @@ import 'package:runners_rush/game/coin_component.dart';
 import 'package:runners_rush/game/hitbox_debug.dart';
 import 'package:runners_rush/game/obstacle_component.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
+import 'package:runners_rush/game/shield_component.dart';
 import 'package:runners_rush/services/audio_service.dart';
 import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/settings_service.dart';
 
 enum PlayerState { running, jumpStart, jumpAir, jumpLand }
+
+/// Outcome of an obstacle collision against shield / invulnerability.
+enum ObstacleHitOutcome {
+  absorbedByShield,
+  ignoredInvulnerable,
+  fatal,
+}
 
 /// Runner with a looping run cycle and a one-shot jump sequence.
 class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
@@ -72,6 +80,8 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
   static const jumpAirStepTime = 0.08;
   /// How long a jump tap is remembered while airborne / landing.
   static const jumpBufferSeconds = 0.15;
+  /// Invulnerability after a shield absorbs a hit.
+  static const shieldInvulnerabilitySeconds = 1.0;
 
   static const _runFrameSuffixes = [
     'run_1.png',
@@ -108,9 +118,13 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
   double _fixedX = 0;
   double _stateTimer = 0;
   double _jumpBuffer = 0;
+  double _invulnerableRemaining = 0;
+  bool hasShield = false;
   bool _hit = false;
   Set<String>? _imageAssets;
   RectangleHitbox? _bodyHitbox;
+
+  bool get isInvulnerable => _invulnerableRemaining > 0;
 
   bool get isOnGround =>
       velocityY >= 0 && (position.y - groundY).abs() <= 0.5;
@@ -209,9 +223,41 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     }
   }
 
+  /// Clears shield and invulnerability (new run / restart).
+  void resetPowerUps() {
+    hasShield = false;
+    _invulnerableRemaining = 0;
+  }
+
+  void activateShield() {
+    hasShield = true;
+  }
+
+  /// Resolves an obstacle contact. Used by collision and unit tests.
+  ObstacleHitOutcome resolveObstacleHit() {
+    if (_invulnerableRemaining > 0) {
+      return ObstacleHitOutcome.ignoredInvulnerable;
+    }
+    if (hasShield) {
+      hasShield = false;
+      _invulnerableRemaining = shieldInvulnerabilitySeconds;
+      return ObstacleHitOutcome.absorbedByShield;
+    }
+    return ObstacleHitOutcome.fatal;
+  }
+
+  /// Advances invulnerability timer (also called from [update]).
+  @visibleForTesting
+  void tickInvulnerability(double dt) {
+    if (_invulnerableRemaining <= 0) return;
+    _invulnerableRemaining -= dt;
+    if (_invulnerableRemaining < 0) _invulnerableRemaining = 0;
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
+    tickInvulnerability(dt);
     velocityY += gravity * dt;
     position.y += velocityY * dt;
     position.x = _fixedX;
@@ -233,6 +279,30 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
   }
 
   @override
+  void render(Canvas canvas) {
+    if (hasShield) {
+      final radius = (width > height ? width : height) * 0.55;
+      final center = Offset(width / 2, height * 0.45);
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..color = const Color(0x5540B0FF)
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..color = const Color(0xAA7EC8FF)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
+    }
+    super.render(canvas);
+  }
+
+  @override
   void onCollisionStart(
     Set<Vector2> intersectionPoints,
     PositionComponent other,
@@ -243,10 +313,24 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
       coin.collect();
       return;
     }
+    final shield = _asShield(other);
+    if (shield != null) {
+      shield.collect();
+      return;
+    }
     if (_isObstacle(other)) {
-      _hit = true;
-      playing = false;
-      game.handlePlayerHit();
+      switch (resolveObstacleHit()) {
+        case ObstacleHitOutcome.absorbedByShield:
+          _asObstacle(other)?.removeFromParent();
+          game.onShieldConsumed();
+          return;
+        case ObstacleHitOutcome.ignoredInvulnerable:
+          return;
+        case ObstacleHitOutcome.fatal:
+          _hit = true;
+          playing = false;
+          game.handlePlayerHit();
+      }
     }
   }
 
@@ -417,9 +501,21 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     return other is ObstacleComponent || other.parent is ObstacleComponent;
   }
 
+  ObstacleComponent? _asObstacle(PositionComponent other) {
+    if (other is ObstacleComponent) return other;
+    final parent = other.parent;
+    return parent is ObstacleComponent ? parent : null;
+  }
+
   CoinComponent? _asCoin(PositionComponent other) {
     if (other is CoinComponent) return other;
     final parent = other.parent;
     return parent is CoinComponent ? parent : null;
+  }
+
+  ShieldComponent? _asShield(PositionComponent other) {
+    if (other is ShieldComponent) return other;
+    final parent = other.parent;
+    return parent is ShieldComponent ? parent : null;
   }
 }

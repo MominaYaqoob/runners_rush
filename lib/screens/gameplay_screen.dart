@@ -187,6 +187,16 @@ class _GameplayScreenState extends State<GameplayScreen> {
                             return _CoinBadge(count: value);
                           },
                         ),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: _game.shieldActive,
+                          builder: (context, active, child) {
+                            if (!active) return const SizedBox.shrink();
+                            return const Padding(
+                              padding: EdgeInsets.only(left: 10),
+                              child: _ShieldBadge(),
+                            );
+                          },
+                        ),
                         const Spacer(),
                         _PauseButton(onPressed: _onPause),
                       ],
@@ -319,6 +329,43 @@ class _CoinBadge extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ShieldBadge extends StatelessWidget {
+  const _ShieldBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('hud-shield-badge'),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _GameplayScreenState._hudFill,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _GameplayScreenState._hudBorder),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x59000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ColorFiltered(
+        colorFilter: const ColorFilter.mode(
+          Color(0xFF7EC8FF),
+          BlendMode.srcATop,
+        ),
+        child: Image.asset(
+          'assets/images/coin.png',
+          width: 22,
+          height: 22,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+        ),
       ),
     );
   }

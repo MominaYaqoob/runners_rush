@@ -12,6 +12,7 @@ import 'package:runners_rush/game/cover_background_component.dart';
 import 'package:runners_rush/game/ground_strip_component.dart';
 import 'package:runners_rush/game/obstacle_component.dart';
 import 'package:runners_rush/game/player_component.dart';
+import 'package:runners_rush/game/shield_component.dart';
 import 'package:runners_rush/services/audio_service.dart';
 import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/score_service.dart';
@@ -40,6 +41,8 @@ class RunnersRushGame extends FlameGame
   static const coinSpawnIntervalMax = 7.0;
   static const coinGroupMinCount = 3;
   static const coinGroupMaxCount = 5;
+  static const shieldSpawnIntervalMin = 25.0;
+  static const shieldSpawnIntervalMax = 40.0;
 
   static const _groundSprites = [
     'obstacle_stone.png',
@@ -54,9 +57,11 @@ class RunnersRushGame extends FlameGame
   late final PlayerComponent player;
   late final Timer _spawnTimer;
   late final Timer _coinTimer;
+  late final Timer _shieldTimer;
   final Random _random = Random();
   final ValueNotifier<int> score = ValueNotifier<int>(0);
   final ValueNotifier<int> coinsCollected = ValueNotifier<int>(0);
+  final ValueNotifier<bool> shieldActive = ValueNotifier<bool>(false);
   double _elapsed = 0;
   bool _isGameOver = false;
   double currentSpeed = initialSpeed;
@@ -157,6 +162,11 @@ class RunnersRushGame extends FlameGame
       onTick: _spawnCoinGroup,
       repeat: true,
     );
+    _shieldTimer = Timer(
+      _nextShieldInterval(),
+      onTick: _spawnShield,
+      repeat: true,
+    );
   }
 
   @override
@@ -176,6 +186,7 @@ class RunnersRushGame extends FlameGame
     score.value = (_elapsed * 10).floor();
     _spawnTimer.update(dt);
     _coinTimer.update(dt);
+    _shieldTimer.update(dt);
   }
 
   @override
@@ -241,6 +252,7 @@ class RunnersRushGame extends FlameGame
         .contains('TestWidgetsFlutterBinding');
     if (inWidgetTest) return;
     try {
+      if (await Vibration.hasVibrator() != true) return;
       await Vibration.vibrate(duration: 200);
     } catch (_) {}
   }
@@ -255,6 +267,23 @@ class RunnersRushGame extends FlameGame
   void onCoinCollected() {
     coinsCollected.value++;
     AudioService.playCoin();
+  }
+
+  void onShieldCollected() {
+    player.activateShield();
+    shieldActive.value = true;
+  }
+
+  void onShieldConsumed() {
+    shieldActive.value = false;
+  }
+
+  /// Clears shield HUD / player power-ups for a fresh run.
+  void resetShieldState() {
+    if (isLoaded) {
+      player.resetPowerUps();
+    }
+    shieldActive.value = false;
   }
 
   void _spawnObstacle() {
@@ -317,10 +346,18 @@ class RunnersRushGame extends FlameGame
     final coinEtas =
         positions.map((p) => (p.x - playerX) / speed).toList(growable: false);
     final obstacleEtas = _obstacleEtas(playerX);
+    final shieldEtas = _shieldEtas(playerX);
     for (final eta in coinEtas) {
       if (!arrivalGapOk(
         candidateEta: eta,
         existingEtas: obstacleEtas,
+        minGap: coinObstacleArrivalGap,
+      )) {
+        return;
+      }
+      if (!arrivalGapOk(
+        candidateEta: eta,
+        existingEtas: shieldEtas,
         minGap: coinObstacleArrivalGap,
       )) {
         return;
@@ -330,6 +367,55 @@ class RunnersRushGame extends FlameGame
     for (final pos in positions) {
       world.add(CoinComponent(speed: speed, spawnPosition: pos));
     }
+  }
+
+  void _spawnShield() {
+    if (_isGameOver) return;
+    _shieldTimer.limit = _nextShieldInterval();
+
+    final speed = currentSpeed;
+    if (speed <= 0) return;
+
+    final playerX = player.position.x;
+    final startX = size.x + size.y * 0.12;
+    final groundY = size.y * (1 - PlayerComponent.groundHeightRatio);
+    final playerH = size.y * PlayerComponent.heightRatio;
+    final y = groundY - playerH * PlayerComponent.hitboxCenterYFromFeet;
+    final eta = (startX - playerX) / speed;
+
+    if (!arrivalGapOk(
+      candidateEta: eta,
+      existingEtas: _obstacleEtas(playerX),
+    )) {
+      return;
+    }
+    if (!arrivalGapOk(
+      candidateEta: eta,
+      existingEtas: _coinEtas(playerX),
+      minGap: coinObstacleArrivalGap,
+    )) {
+      return;
+    }
+    if (!arrivalGapOk(
+      candidateEta: eta,
+      existingEtas: _shieldEtas(playerX),
+      minGap: coinObstacleArrivalGap,
+    )) {
+      return;
+    }
+
+    world.add(
+      ShieldComponent(
+        speed: speed,
+        spawnPosition: Vector2(startX, y),
+      ),
+    );
+  }
+
+  double _nextShieldInterval() {
+    return shieldSpawnIntervalMin +
+        _random.nextDouble() *
+            (shieldSpawnIntervalMax - shieldSpawnIntervalMin);
   }
 
   String _pickGroundSprite() {
@@ -351,9 +437,16 @@ class RunnersRushGame extends FlameGame
     )) {
       return false;
     }
-    return arrivalGapOk(
+    if (!arrivalGapOk(
       candidateEta: candidateEta,
       existingEtas: _coinEtas(playerX),
+      minGap: coinObstacleArrivalGap,
+    )) {
+      return false;
+    }
+    return arrivalGapOk(
+      candidateEta: candidateEta,
+      existingEtas: _shieldEtas(playerX),
       minGap: coinObstacleArrivalGap,
     );
   }
@@ -367,6 +460,12 @@ class RunnersRushGame extends FlameGame
   Iterable<double> _coinEtas(double playerX) {
     return world.children.whereType<CoinComponent>().map(
           (c) => (c.position.x - playerX) / c.speed,
+        );
+  }
+
+  Iterable<double> _shieldEtas(double playerX) {
+    return world.children.whereType<ShieldComponent>().map(
+          (s) => (s.position.x - playerX) / s.speed,
         );
   }
 }
