@@ -24,6 +24,7 @@ class ShopBackground {
     required this.assetPath,
     required this.groundAssetPath,
     required this.price,
+    this.bakedGroundFraction = 0,
   });
 
   final String id;
@@ -33,6 +34,11 @@ class ShopBackground {
   /// Matching scrolling ground strip, e.g. `ground_texture.png`.
   final String groundAssetPath;
   final int price;
+
+  /// Bottom fraction of the sky PNG that already paints a stone path.
+  /// Cropped out in [CoverBackgroundComponent] so it does not double up with
+  /// [GroundStripComponent]. Evening has none (0). Tweak per theme if needed.
+  final double bakedGroundFraction;
 
   String get flutterAsset => 'assets/images/$assetPath';
 }
@@ -46,22 +52,41 @@ class ShopService {
   static const eveningId = 'evening';
   static const defaultGroundAssetPath = 'ground_texture.png';
 
+  // --- Economy (tune rates/prices here) ---
+  /// Score points needed per coin from a finished run (~2s at 10 pts/s).
+  static const scorePerRunCoin = 20;
+  static const malePrice = 0;
+  static const femalePrice = 10;
+  static const eveningPrice = 0;
+  static const morningPrice = 5;
+  static const dayPrice = 6;
+  static const nightPrice = 7;
+  static const autumnPrice = 8;
+  static const rainPrice = 9;
+  static const snowPrice = 10;
+
+  /// Default crop for themes that bake a stone path into the sky PNG.
+  static const defaultBakedGroundFraction = 0.28;
+
   static const defaultUnlocked = [CharacterService.male];
 
   static const defaultUnlockedBackgrounds = [eveningId];
+
+  static int coinsForRun({required int score, int collected = 0}) =>
+      score ~/ scorePerRunCoin + collected;
 
   static const characters = <ShopCharacter>[
     ShopCharacter(
       id: CharacterService.male,
       name: 'Explorer Male',
       assetPath: 'assets/images/shop_male_portrait.png',
-      price: 0,
+      price: malePrice,
     ),
     ShopCharacter(
       id: CharacterService.female,
       name: 'Explorer Female',
       assetPath: 'assets/images/female_run.png',
-      price: 10,
+      price: femalePrice,
     ),
   ];
 
@@ -78,49 +103,56 @@ class ShopService {
       name: 'Evening',
       assetPath: 'background_evening.png',
       groundAssetPath: defaultGroundAssetPath,
-      price: 0,
+      price: eveningPrice,
+      bakedGroundFraction: 0,
     ),
     ShopBackground(
       id: 'morning',
       name: 'Morning',
       assetPath: 'background_morning.png',
       groundAssetPath: defaultGroundAssetPath,
-      price: 5,
+      price: morningPrice,
+      bakedGroundFraction: defaultBakedGroundFraction,
     ),
     ShopBackground(
       id: 'day',
       name: 'Day',
       assetPath: 'background_day.png',
       groundAssetPath: defaultGroundAssetPath,
-      price: 6,
+      price: dayPrice,
+      bakedGroundFraction: defaultBakedGroundFraction,
     ),
     ShopBackground(
       id: 'night',
       name: 'Night',
       assetPath: 'background_night.png',
       groundAssetPath: 'ground_night.png',
-      price: 7,
+      price: nightPrice,
+      bakedGroundFraction: defaultBakedGroundFraction,
     ),
     ShopBackground(
       id: 'autumn',
       name: 'Autumn',
       assetPath: 'background_autumn.png',
       groundAssetPath: 'ground_autumn.png',
-      price: 8,
+      price: autumnPrice,
+      bakedGroundFraction: defaultBakedGroundFraction,
     ),
     ShopBackground(
       id: 'rain',
       name: 'Rain',
       assetPath: 'background_rain.png',
       groundAssetPath: 'ground_rain.png',
-      price: 9,
+      price: rainPrice,
+      bakedGroundFraction: defaultBakedGroundFraction,
     ),
     ShopBackground(
       id: 'snow',
       name: 'Snow',
       assetPath: 'background_snow.png',
       groundAssetPath: 'ground_snow.png',
-      price: 10,
+      price: snowPrice,
+      bakedGroundFraction: defaultBakedGroundFraction,
     ),
   ];
 
