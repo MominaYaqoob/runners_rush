@@ -4,7 +4,9 @@ import 'dart:ui';
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:flame_audio/flame_audio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:runners_rush/game/coin_component.dart';
 import 'package:runners_rush/game/hitbox_debug.dart';
 import 'package:runners_rush/game/obstacle_component.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
@@ -68,6 +70,8 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
   static const jumpStartDuration = 0.12;
   static const jumpLandDuration = 0.14;
   static const jumpAirStepTime = 0.08;
+  /// How long a jump tap is remembered while airborne / landing.
+  static const jumpBufferSeconds = 0.15;
 
   static const _runFrameSuffixes = [
     'run_1.png',
@@ -103,12 +107,42 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
   double groundY = 0;
   double _fixedX = 0;
   double _stateTimer = 0;
+  double _jumpBuffer = 0;
   bool _hit = false;
   Set<String>? _imageAssets;
   RectangleHitbox? _bodyHitbox;
 
   bool get isOnGround =>
       velocityY >= 0 && (position.y - groundY).abs() <= 0.5;
+
+  bool get _canJump =>
+      canJumpNow(current: current, isOnGround: isOnGround, hit: _hit);
+
+  /// Shared jump gate used by [jump] / buffer and unit tests.
+  @visibleForTesting
+  static bool canJumpNow({
+    required PlayerState? current,
+    required bool isOnGround,
+    required bool hit,
+  }) {
+    return !hit &&
+        isOnGround &&
+        (current == PlayerState.running || current == PlayerState.jumpLand);
+  }
+
+  /// Counts down a stored jump tap; returns true when a jump should start.
+  @visibleForTesting
+  static double tickJumpBuffer(
+    double remaining,
+    double dt, {
+    required bool canJump,
+  }) {
+    if (remaining <= 0) return 0;
+    remaining -= dt;
+    if (canJump) return -1; // sentinel: consume / fire
+    if (remaining < 0) return 0;
+    return remaining;
+  }
 
   double get _landProximity => height * 0.18;
 
@@ -195,6 +229,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     }
     _syncHitbox();
     _updateState(dt);
+    _tickJumpBuffer(dt);
   }
 
   @override
@@ -203,6 +238,11 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     PositionComponent other,
   ) {
     super.onCollisionStart(intersectionPoints, other);
+    final coin = _asCoin(other);
+    if (coin != null) {
+      coin.collect();
+      return;
+    }
     if (_isObstacle(other)) {
       _hit = true;
       playing = false;
@@ -211,11 +251,30 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
   }
 
   void jump() {
-    if (_hit || current != PlayerState.running || !isOnGround) return;
+    if (_hit) return;
+    if (_canJump) {
+      _startJump();
+      return;
+    }
+    _jumpBuffer = jumpBufferSeconds;
+  }
+
+  void _startJump() {
+    _jumpBuffer = 0;
     _playJumpSfx();
     velocityY = jumpVelocity;
     _stateTimer = jumpStartDuration;
     current = PlayerState.jumpStart;
+  }
+
+  void _tickJumpBuffer(double dt) {
+    if (_jumpBuffer <= 0) return;
+    final next = tickJumpBuffer(_jumpBuffer, dt, canJump: _canJump);
+    if (next < 0) {
+      _startJump();
+      return;
+    }
+    _jumpBuffer = next;
   }
 
   Future<void> _playJumpSfx() async {
@@ -356,5 +415,11 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
 
   bool _isObstacle(PositionComponent other) {
     return other is ObstacleComponent || other.parent is ObstacleComponent;
+  }
+
+  CoinComponent? _asCoin(PositionComponent other) {
+    if (other is CoinComponent) return other;
+    final parent = other.parent;
+    return parent is CoinComponent ? parent : null;
   }
 }

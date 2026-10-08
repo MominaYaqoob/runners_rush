@@ -6,9 +6,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/audio_service.dart';
 import 'package:runners_rush/services/character_service.dart';
+import 'package:runners_rush/services/daily_reward_service.dart';
 import 'package:runners_rush/services/score_service.dart';
 import 'package:runners_rush/services/settings_service.dart';
 import 'package:runners_rush/services/shop_service.dart';
+import 'package:runners_rush/widgets/themed_background.dart';
 
 class _Hud {
   static const fill = Color(0x66000000);
@@ -35,6 +37,20 @@ class _Hud {
   }
 }
 
+/// Home hero preview for [characterId] (`CharacterService.male` / `female`).
+String _homePreviewAsset(String characterId) {
+  return characterId == CharacterService.female
+      ? 'assets/images/female_run.png'
+      : 'assets/images/home_male_hero.png';
+}
+
+/// Character-select dialog thumbnail for [characterId].
+String _dialogPreviewAsset(String characterId) {
+  return characterId == CharacterService.female
+      ? 'assets/images/female_run.png'
+      : 'assets/images/male_idle_1.png';
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -52,14 +68,10 @@ class _HomeScreenState extends State<HomeScreen> {
     systemNavigationBarDividerColor: Colors.transparent,
   );
 
-  static const _maleAsset = 'assets/images/male_run.png';
-  static const _femaleAsset = 'assets/images/female_run.png';
-  static const _defaultBackgroundAsset =
-      'assets/images/background_evening.png';
-
-  String _selectedCharacter = _maleAsset;
-  String _backgroundAsset = _defaultBackgroundAsset;
+  String _selectedCharacter = CharacterService.male;
+  int _themeReloadToken = 0;
   bool _soundOn = true;
+  bool _dailyAvailable = false;
   int _highScore = 0;
   int _coins = 0;
 
@@ -78,8 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await AudioService.init();
     final character = await CharacterService.getSelectedCharacter();
     final unlocked = await ShopService.getUnlockedCharacters();
-    final backgroundPath =
-        await ShopService.getSelectedBackgroundAssetPath();
+    final dailyAvailable = await DailyRewardService.canClaim();
     if (!mounted) return;
     final femaleOk = unlocked.contains(CharacterService.female);
     final useFemale =
@@ -88,8 +99,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _highScore = highScore;
       _coins = coins;
       _soundOn = SettingsService.soundEffectsEnabled;
-      _selectedCharacter = useFemale ? _femaleAsset : _maleAsset;
-      _backgroundAsset = 'assets/images/$backgroundPath';
+      _dailyAvailable = dailyAvailable;
+      _selectedCharacter =
+          useFemale ? CharacterService.female : CharacterService.male;
+      _themeReloadToken++;
     });
     if (character == CharacterService.female && !femaleOk) {
       await CharacterService.setSelectedCharacter(CharacterService.male);
@@ -107,13 +120,38 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.55),
       builder: (context) {
-        return _CharacterSelectDialog(selectedAsset: _selectedCharacter);
+        return _CharacterSelectDialog(selectedId: _selectedCharacter);
       },
     );
     if (!mounted || picked == null) return;
     setState(() => _selectedCharacter = picked);
-    await CharacterService.setSelectedCharacter(
-      picked == _femaleAsset ? CharacterService.female : CharacterService.male,
+    await CharacterService.setSelectedCharacter(picked);
+  }
+
+  Future<void> _onDailyRewardTap() async {
+    AudioService.playButtonTap();
+    if (!_dailyAvailable) return;
+
+    final result = await DailyRewardService.claim();
+    if (!mounted || result == null) {
+      if (mounted) {
+        setState(() => _dailyAvailable = false);
+      }
+      return;
+    }
+
+    final coins = await ShopService.getCoins();
+    if (!mounted) return;
+    setState(() {
+      _coins = coins;
+      _dailyAvailable = false;
+    });
+
+    AudioService.playCoin();
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      builder: (context) => _DailyRewardDialog(claim: result),
     );
   }
 
@@ -126,11 +164,10 @@ class _HomeScreenState extends State<HomeScreen> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            Image.asset(
-              _backgroundAsset,
-              fit: BoxFit.cover,
+            ThemedBackground(
+              reloadToken: _themeReloadToken,
+              child: const ColoredBox(color: Color(0x4D000000)),
             ),
-            const ColoredBox(color: Color(0x4D000000)),
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
@@ -142,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       right: 0,
                       bottom: 48,
                       child: _CharacterPreview(
-                        selectedAsset: _selectedCharacter,
+                        characterId: _selectedCharacter,
                         onTap: _openCharacterSelect,
                       ),
                     ),
@@ -154,6 +191,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             const _BrandLockup(),
                             const Spacer(),
+                            _DailyGiftButton(
+                              available: _dailyAvailable,
+                              onPressed: _onDailyRewardTap,
+                            ),
+                            const SizedBox(height: 10),
                             _SoundToggle(
                               soundOn: _soundOn,
                               onPressed: () {
@@ -329,21 +371,18 @@ class _CoinsBadge extends StatelessWidget {
 
 class _CharacterPreview extends StatelessWidget {
   const _CharacterPreview({
-    required this.selectedAsset,
+    required this.characterId,
     required this.onTap,
   });
 
-  final String selectedAsset;
+  final String characterId;
   final VoidCallback onTap;
-
-  static const _maleHero = 'assets/images/home_male_hero.png';
-  static const _femaleIdle = 'assets/images/female_run.png';
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final isMale = selectedAsset.contains('male_');
-    final asset = isMale ? _maleHero : _femaleIdle;
+    final isMale = characterId == CharacterService.male;
+    final asset = _homePreviewAsset(characterId);
 
     return GestureDetector(
       onTap: onTap,
@@ -542,22 +581,175 @@ class _SoundToggle extends StatelessWidget {
   }
 }
 
+class _DailyGiftButton extends StatelessWidget {
+  const _DailyGiftButton({
+    required this.available,
+    required this.onPressed,
+  });
+
+  final bool available;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Opacity(
+        opacity: available ? 1 : 0.45,
+        child: Container(
+          width: 52,
+          height: 52,
+          decoration: available
+              ? BoxDecoration(
+                  color: _Hud.fill,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFFFC857).withValues(alpha: 0.85),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    ..._Hud.shadow,
+                    BoxShadow(
+                      color: const Color(0xFFFFC857).withValues(alpha: 0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                )
+              : _Hud.card(radius: 16),
+          child: Icon(
+            Icons.card_giftcard_rounded,
+            color: available ? const Color(0xFFFFC857) : Colors.white,
+            size: 26,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DailyRewardDialog extends StatelessWidget {
+  const _DailyRewardDialog({required this.claim});
+
+  final DailyRewardClaim claim;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Container(
+            width: 320,
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+            decoration: BoxDecoration(
+              color: const Color(0xE62A1A3A),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x59000000),
+                  blurRadius: 24,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Daily Reward!',
+                  style: GoogleFonts.baloo2(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Day ${claim.streakDay} streak',
+                  style: GoogleFonts.baloo2(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withValues(alpha: 0.75),
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Image.asset(
+                  'assets/images/coin.png',
+                  width: 64,
+                  height: 64,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.high,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '+${claim.coins} coins',
+                  style: GoogleFonts.baloo2(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFFFC857),
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF8A3D), Color(0xFF6B3FA0)],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              const Color(0xFF6B3FA0).withValues(alpha: 0.45),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      'Nice!',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.baloo2(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 0.6,
+                        height: 1.1,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CharacterSelectDialog extends StatefulWidget {
-  const _CharacterSelectDialog({required this.selectedAsset});
+  const _CharacterSelectDialog({required this.selectedId});
 
-  final String selectedAsset;
-
-  static const maleAsset = 'assets/images/male_run.png';
-  static const femaleAsset = 'assets/images/female_run.png';
-  static const malePreview = 'assets/images/male_idle_1.png';
-  static const femalePreview = 'assets/images/female_run.png';
+  final String selectedId;
 
   @override
   State<_CharacterSelectDialog> createState() => _CharacterSelectDialogState();
 }
 
 class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
-  late String _pendingAsset = widget.selectedAsset;
+  late String _pendingId = widget.selectedId;
   bool _femaleUnlocked = false;
   bool _loaded = false;
   String? _hint;
@@ -578,9 +770,8 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
     setState(() {
       _femaleUnlocked = femaleOk;
       _loaded = true;
-      if (!femaleOk &&
-          _pendingAsset == _CharacterSelectDialog.femaleAsset) {
-        _pendingAsset = _CharacterSelectDialog.maleAsset;
+      if (!femaleOk && _pendingId == CharacterService.female) {
+        _pendingId = CharacterService.male;
       }
     });
   }
@@ -592,7 +783,7 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
     }
     setState(() {
       _hint = null;
-      _pendingAsset = _CharacterSelectDialog.femaleAsset;
+      _pendingId = CharacterService.female;
     });
   }
 
@@ -638,15 +829,14 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
                   children: [
                     Expanded(
                       child: _CharacterOption(
-                        asset: _CharacterSelectDialog.malePreview,
+                        asset: _dialogPreviewAsset(CharacterService.male),
                         label: 'Explorer Male',
-                        selected:
-                            _pendingAsset == _CharacterSelectDialog.maleAsset,
+                        selected: _pendingId == CharacterService.male,
                         locked: false,
                         onTap: () {
                           setState(() {
                             _hint = null;
-                            _pendingAsset = _CharacterSelectDialog.maleAsset;
+                            _pendingId = CharacterService.male;
                           });
                         },
                       ),
@@ -654,10 +844,9 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
                     const SizedBox(width: 14),
                     Expanded(
                       child: _CharacterOption(
-                        asset: _CharacterSelectDialog.femalePreview,
+                        asset: _dialogPreviewAsset(CharacterService.female),
                         label: 'Explorer Female',
-                        selected: _pendingAsset ==
-                            _CharacterSelectDialog.femaleAsset,
+                        selected: _pendingId == CharacterService.female,
                         locked: _loaded && !_femaleUnlocked,
                         priceLabel: _loaded && !_femaleUnlocked
                             ? '$_femalePrice 🪙'
@@ -682,7 +871,7 @@ class _CharacterSelectDialogState extends State<_CharacterSelectDialog> {
                 ],
                 const SizedBox(height: 14),
                 GestureDetector(
-                  onTap: () => Navigator.of(context).pop(_pendingAsset),
+                  onTap: () => Navigator.of(context).pop(_pendingId),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 10),

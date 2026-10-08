@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,10 +27,16 @@ class _GameplayScreenState extends State<GameplayScreen> {
 
   static const _hudFill = Color(0x66000000);
   static const _hudBorder = Color(0x26FFFFFF);
+  static const _countdownStep = Duration(milliseconds: 700);
+  static const _countdownLabels = ['3', '2', '1'];
 
   late RunnersRushGame _game;
   Key _gameWidgetKey = UniqueKey();
   bool _isPaused = false;
+  int? _countdownIndex;
+  Timer? _countdownTimer;
+
+  bool get _isCountingDown => _countdownIndex != null;
 
   @override
   void initState() {
@@ -37,85 +45,197 @@ class _GameplayScreenState extends State<GameplayScreen> {
     _createGame();
   }
 
+  @override
+  void dispose() {
+    _stopCountdown(notify: false);
+    super.dispose();
+  }
+
   void _createGame() {
+    _stopCountdown(notify: false);
     _game = RunnersRushGame();
     _gameWidgetKey = UniqueKey();
     _isPaused = false;
   }
 
+  void _stopCountdown({bool notify = true}) {
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    if (_countdownIndex == null) return;
+    _countdownIndex = null;
+    if (notify && mounted) {
+      setState(() {});
+    }
+  }
+
   void _onPause() {
-    if (_isPaused) return;
+    if (_game.isGameOver) return;
+    final wasCounting = _isCountingDown;
+    _stopCountdown(notify: false);
+    if (_isPaused && !wasCounting) return;
     _game.pauseEngine();
-    setState(() => _isPaused = true);
+    setState(() {
+      _isPaused = true;
+      _countdownIndex = null;
+    });
   }
 
   void _onResume() {
-    setState(() => _isPaused = false);
-    _game.resumeEngine();
+    if (!_isPaused || _game.isGameOver) return;
+    // Keep engine paused through the countdown.
+    setState(() {
+      _isPaused = false;
+      _countdownIndex = 0;
+    });
+    _scheduleCountdownTick();
+  }
+
+  void _scheduleCountdownTick() {
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer(_countdownStep, () {
+      if (!mounted || _countdownIndex == null) return;
+      final next = _countdownIndex! + 1;
+      if (next >= _countdownLabels.length) {
+        setState(() {
+          _countdownIndex = null;
+          _countdownTimer = null;
+        });
+        if (!_game.isGameOver) {
+          _game.resumeEngine();
+        }
+        return;
+      }
+      setState(() => _countdownIndex = next);
+      _scheduleCountdownTick();
+    });
   }
 
   void _onRestart() {
+    _stopCountdown(notify: false);
+    _game.pauseEngine();
     setState(_createGame);
   }
 
   void _onHome() {
+    _stopCountdown(notify: false);
     _game.pauseEngine();
-    setState(() => _isPaused = false);
+    setState(() {
+      _isPaused = false;
+      _countdownIndex = null;
+    });
     Navigator.of(context).pushNamedAndRemoveUntil(
       AppRoutes.home,
       (route) => false,
     );
   }
 
+  void _onSystemBack() {
+    if (_game.isGameOver) return;
+    if (_isPaused) {
+      _onResume();
+    } else {
+      _onPause();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: _overlayStyle,
-      child: Scaffold(
-        backgroundColor: RunnersRushGame.placeholderColor,
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            GameWidget<RunnersRushGame>(
-              key: _gameWidgetKey,
-              game: _game,
-              loadingBuilder: (context) => const ColoredBox(
-                color: RunnersRushGame.placeholderColor,
-              ),
-            ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ValueListenableBuilder<int>(
-                        valueListenable: _game.score,
-                        builder: (context, value, child) {
-                          return _ScoreBadge(score: value);
-                        },
-                      ),
-                      const Spacer(),
-                      _PauseButton(onPressed: _onPause),
-                    ],
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          _onSystemBack();
+        },
+        child: Scaffold(
+          backgroundColor: RunnersRushGame.placeholderColor,
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              IgnorePointer(
+                ignoring: _isCountingDown,
+                child: GameWidget<RunnersRushGame>(
+                  key: _gameWidgetKey,
+                  game: _game,
+                  loadingBuilder: (context) => const ColoredBox(
+                    color: RunnersRushGame.placeholderColor,
                   ),
                 ),
               ),
-            ),
-            if (_isPaused)
-              Positioned.fill(
-                child: PauseMenu(
-                  onResume: _onResume,
-                  onRestart: _onRestart,
-                  onHome: _onHome,
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ValueListenableBuilder<int>(
+                          valueListenable: _game.score,
+                          builder: (context, value, child) {
+                            return _ScoreBadge(score: value);
+                          },
+                        ),
+                        const SizedBox(width: 10),
+                        ValueListenableBuilder<int>(
+                          valueListenable: _game.coinsCollected,
+                          builder: (context, value, child) {
+                            return _CoinBadge(count: value);
+                          },
+                        ),
+                        const Spacer(),
+                        _PauseButton(onPressed: _onPause),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-          ],
+              if (_isPaused)
+                Positioned.fill(
+                  child: PauseMenu(
+                    onResume: _onResume,
+                    onRestart: _onRestart,
+                    onHome: _onHome,
+                  ),
+                ),
+              if (_isCountingDown)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Center(
+                      child: TweenAnimationBuilder<double>(
+                        key: ValueKey<int>(_countdownIndex!),
+                        tween: Tween(begin: 0.72, end: 1),
+                        duration: const Duration(milliseconds: 380),
+                        curve: Curves.easeOutBack,
+                        builder: (context, scale, child) {
+                          return Transform.scale(scale: scale, child: child);
+                        },
+                        child: Text(
+                          _countdownLabels[_countdownIndex!],
+                          style: GoogleFonts.baloo2(
+                            fontSize: 80,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            height: 1,
+                            shadows: const [
+                              Shadow(
+                                color: Color(0x99000000),
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -151,6 +271,54 @@ class _ScoreBadge extends StatelessWidget {
           color: Colors.white,
           height: 1.05,
         ),
+      ),
+    );
+  }
+}
+
+class _CoinBadge extends StatelessWidget {
+  const _CoinBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('hud-coin-badge'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: _GameplayScreenState._hudFill,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _GameplayScreenState._hudBorder),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x59000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'assets/images/coin.png',
+            width: 22,
+            height: 22,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.medium,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '×$count',
+            style: GoogleFonts.baloo2(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              height: 1.05,
+            ),
+          ),
+        ],
       ),
     );
   }

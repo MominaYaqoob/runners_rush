@@ -112,6 +112,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         body: Stack(
           fit: StackFit.expand,
           children: [
+            // Fixed evening: onboarding runs before any shop purchase/theme pick.
             Image.asset(
               'assets/images/background_evening.png',
               fit: BoxFit.cover,

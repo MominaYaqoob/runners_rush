@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/audio_service.dart';
 import 'package:runners_rush/services/settings_service.dart';
+import 'package:runners_rush/widgets/themed_background.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -93,11 +94,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           body: Stack(
             fit: StackFit.expand,
             children: [
-              Image.asset(
-                'assets/images/background_evening.png',
-                fit: BoxFit.cover,
+              const ThemedBackground(
+                child: ColoredBox(color: Color(0x66000000)),
               ),
-              const ColoredBox(color: Color(0x66000000)),
               SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),

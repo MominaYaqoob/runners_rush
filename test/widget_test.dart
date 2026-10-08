@@ -15,6 +15,7 @@ import 'package:runners_rush/screens/gameplay_screen.dart';
 import 'package:runners_rush/screens/home_screen.dart';
 import 'package:runners_rush/screens/onboarding_screen.dart';
 import 'package:runners_rush/services/settings_service.dart';
+import 'package:runners_rush/services/shop_service.dart';
 
 void main() {
   setUpAll(() {
@@ -132,6 +133,21 @@ void main() {
     expect(find.text('PLAY'), findsNothing);
   });
 
+  testWidgets('home shows female preview when female is selected and unlocked',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({
+      'selected_character': 'female',
+      'unlocked_characters': ['male', 'female'],
+    });
+    await setLandscape(tester);
+    await tester.pumpWidget(
+      const MaterialApp(home: HomeScreen()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_homePreviewAsset(tester), 'assets/images/female_run.png');
+  });
+
   testWidgets('home play shop settings and character select', (WidgetTester tester) async {
     await setLandscape(tester);
     await tester.pumpWidget(
@@ -198,6 +214,7 @@ void main() {
     expect(find.text('Paused'), findsNothing);
     expect(find.byType(GameWidget<RunnersRushGame>), findsOneWidget);
 
+    // Cancel countdown via pause so no pending timers remain.
     await tester.tap(find.byIcon(Icons.pause_rounded));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
@@ -206,6 +223,42 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('PLAY'), findsOneWidget);
     expect(find.text('Paused'), findsNothing);
+  });
+
+  testWidgets('resume countdown shows 3 and pause cancels it', (WidgetTester tester) async {
+    await setLandscape(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        routes: {
+          '/': (context) => const GameplayScreen(),
+          AppRoutes.home: (context) => const Scaffold(body: Text('PLAY')),
+        },
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.byIcon(Icons.pause_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.text('Paused'), findsOneWidget);
+
+    await tester.tap(find.text('Resume'));
+    await tester.pump();
+    expect(find.text('Paused'), findsNothing);
+    expect(find.text('3'), findsOneWidget);
+    expect(find.byType(GameWidget<RunnersRushGame>), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.pause_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.text('Paused'), findsOneWidget);
+    expect(find.text('3'), findsNothing);
+
+    await tester.tap(find.text('Home'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('PLAY'), findsOneWidget);
   });
 
   testWidgets('gameplay embeds Flame game under hud overlay', (WidgetTester tester) async {
@@ -224,6 +277,8 @@ void main() {
 
     expect(find.byType(GameWidget<RunnersRushGame>), findsOneWidget);
     expect(find.text('0'), findsOneWidget);
+    expect(find.byKey(const ValueKey('hud-coin-badge')), findsOneWidget);
+    expect(find.text('×0'), findsOneWidget);
     expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.pause_rounded));
@@ -233,6 +288,71 @@ void main() {
     expect(find.text('Resume'), findsOneWidget);
     expect(find.text('Restart'), findsOneWidget);
 
+    await tester.tap(find.text('Home'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('PLAY'), findsOneWidget);
+  });
+
+  testWidgets('gameplay HUD shows coin badge', (WidgetTester tester) async {
+    await setLandscape(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        routes: {
+          '/': (context) => const GameplayScreen(),
+          AppRoutes.home: (context) => const Scaffold(body: Text('PLAY')),
+        },
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const ValueKey('hud-coin-badge')), findsOneWidget);
+    expect(find.text('×0'), findsOneWidget);
+    expect(find.byType(GameWidget<RunnersRushGame>), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.pause_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.tap(find.text('Home'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('PLAY'), findsOneWidget);
+  });
+
+  testWidgets('system back pauses gameplay then resumes', (WidgetTester tester) async {
+    await setLandscape(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        routes: {
+          '/': (context) => const GameplayScreen(),
+          AppRoutes.home: (context) => const Scaffold(body: Text('PLAY')),
+        },
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Paused'), findsNothing);
+    expect(find.byType(GameplayScreen), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.text('Paused'), findsOneWidget);
+    expect(find.text('PLAY'), findsNothing);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.text('Paused'), findsNothing);
+    expect(find.byType(GameplayScreen), findsOneWidget);
+    // Second back starts countdown — cancel via pause before test ends.
+    expect(find.text('3'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.pause_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.text('Paused'), findsOneWidget);
     await tester.tap(find.text('Home'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -341,6 +461,27 @@ void main() {
     expect(find.text('PLAY'), findsOneWidget);
   });
 
+  testWidgets('scoreboard uses selected night background when unlocked',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({
+      'selected_background': 'night',
+      'unlocked_backgrounds': ['evening', 'night'],
+    });
+    await setLandscape(tester);
+    await tester.pumpWidget(
+      const MaterialApp(home: ScoreboardScreen()),
+    );
+    await tester.pumpAndSettle();
+
+    final assets = tester
+        .widgetList<Image>(find.byType(Image))
+        .map((image) => image.image)
+        .whereType<AssetImage>()
+        .map((image) => image.assetName)
+        .toSet();
+    expect(assets, contains('assets/images/background_night.png'));
+  });
+
   testWidgets('shop shows skins coins and select', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({
       'coins': 500,
@@ -372,7 +513,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Selected'), findsAtLeastNWidgets(1));
     expect(find.text('Owned'), findsAtLeastNWidgets(2));
-    expect(find.text('10'), findsNothing);
+    // Snow background also costs 10 — assert unlock via prefs, not text absence.
+    expect(
+      await ShopService.getUnlockedCharacters(),
+      contains('female'),
+    );
 
     await tester.tap(find.byIcon(Icons.arrow_back_rounded));
     await tester.pumpAndSettle();

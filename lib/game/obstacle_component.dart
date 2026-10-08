@@ -1,7 +1,8 @@
-import 'dart:ui';
+import 'dart:ui' as ui;
 
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
+import 'package:flutter/painting.dart';
 import 'package:runners_rush/game/hitbox_debug.dart';
 import 'package:runners_rush/game/player_component.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
@@ -33,6 +34,17 @@ class ObstacleComponent extends SpriteComponent
   static const flyingHitboxCenterYFromFeet = 0.50;
   /// Centered on the shaft (sprite-local). Flip mirrors it toward the runner.
   static const flyingHitboxCenterX = 0.04;
+
+  static const _rimOuterScale = 1.06;
+  static const _rimOuterBlur = 3.5;
+  static const _rimOuterTint = Color(0xB3FFF8E7);
+  static const _rimInnerScale = 1.03;
+  static const _rimInnerBlur = 1.5;
+  static const _rimInnerTint = Color(0xE6FFEFC2);
+
+  /// Soft rim baked once per [spritePath] (blur is too costly per-frame).
+  static final Map<String, ui.Image> _rimCache = {};
+  static final Map<String, Future<ui.Image>> _rimPending = {};
 
   static Vector2 hitboxSizeFor(Vector2 spriteSize, {required bool flying}) {
     final scale = flying ? flyingHitboxScale : hitboxScale;
@@ -92,9 +104,73 @@ class ObstacleComponent extends SpriteComponent
     return bottom + offset.y + box.y / 2;
   }
 
+  /// Padding around the sprite in the baked rim (max blur radius × 3 per side).
+  static double rimPadPx() => _rimOuterBlur * 3;
+
+  /// Build (or reuse) the soft rim for [spritePath] at the sprite's pixel size.
+  static Future<ui.Image> rimImageFor(String spritePath, Sprite sprite) {
+    final cached = _rimCache[spritePath];
+    if (cached != null) return Future<ui.Image>.value(cached);
+    return _rimPending.putIfAbsent(
+      spritePath,
+      () => _bakeRim(spritePath, sprite),
+    );
+  }
+
+  static Future<ui.Image> _bakeRim(String spritePath, Sprite sprite) async {
+    final srcW = sprite.srcSize.x;
+    final srcH = sprite.srcSize.y;
+    final pad = rimPadPx();
+    final outW = (srcW + pad * 2).ceil();
+    final outH = (srcH + pad * 2).ceil();
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final spriteSize = Vector2(srcW, srcH);
+    final cx = pad + srcW / 2;
+    final cy = pad + srcH;
+
+    void paintRim({
+      required double scale,
+      required double blur,
+      required Color tint,
+    }) {
+      final paint = Paint()
+        ..filterQuality = FilterQuality.medium
+        ..colorFilter = ColorFilter.mode(tint, BlendMode.srcATop)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur);
+      canvas.save();
+      canvas.translate(cx, cy);
+      canvas.scale(scale);
+      canvas.translate(-cx, -cy);
+      canvas.translate(pad, pad);
+      sprite.render(canvas, size: spriteSize, overridePaint: paint);
+      canvas.restore();
+    }
+
+    paintRim(scale: _rimOuterScale, blur: _rimOuterBlur, tint: _rimOuterTint);
+    paintRim(scale: _rimInnerScale, blur: _rimInnerBlur, tint: _rimInnerTint);
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(outW, outH);
+    picture.dispose();
+    _rimCache[spritePath] = image;
+    _rimPending.remove(spritePath);
+    return image;
+  }
+
+  /// Release all baked rims (call when the Flame game is removed).
+  static void disposeRimCache() {
+    for (final image in _rimCache.values) {
+      image.dispose();
+    }
+    _rimCache.clear();
+    _rimPending.clear();
+  }
+
   final String spritePath;
   final bool flying;
   final double speed;
+  ui.Image? _rim;
 
   @override
   Future<void> onLoad() async {
@@ -107,6 +183,7 @@ class ObstacleComponent extends SpriteComponent
     if (flying) {
       flipHorizontally();
     }
+    _rim = await rimImageFor(spritePath, sprite!);
     final box = RectangleHitbox(
       size: hitboxSizeFor(size, flying: flying),
       position: hitboxLocalCenter(size, flying: flying),
@@ -117,54 +194,31 @@ class ObstacleComponent extends SpriteComponent
     await add(box);
   }
 
-  /// Thin soft light rim so hazards stay readable on busy jungle backdrops.
+  /// Soft rim from cache + the normal sprite (no per-frame MaskFilter.blur).
   @override
   void render(Canvas canvas) {
+    final rim = _rim;
     final s = sprite;
-    if (s != null) {
-      final cx = size.x / 2;
-      final cy = size.y;
-      _paintRim(
-        canvas,
-        s,
-        scale: 1.06,
-        blur: 3.5,
-        tint: const Color(0xB3FFF8E7),
-        cx: cx,
-        cy: cy,
+    if (rim != null && s != null && s.srcSize.x > 0 && s.srcSize.y > 0) {
+      final pad = rimPadPx();
+      final scaleX = size.x / s.srcSize.x;
+      final scaleY = size.y / s.srcSize.y;
+      final padX = pad * scaleX;
+      final padY = pad * scaleY;
+      final dest = Rect.fromLTWH(
+        -padX,
+        -padY,
+        size.x + padX * 2,
+        size.y + padY * 2,
       );
-      _paintRim(
-        canvas,
-        s,
-        scale: 1.03,
-        blur: 1.5,
-        tint: const Color(0xE6FFEFC2),
-        cx: cx,
-        cy: cy,
+      canvas.drawImageRect(
+        rim,
+        Rect.fromLTWH(0, 0, rim.width.toDouble(), rim.height.toDouble()),
+        dest,
+        Paint()..filterQuality = FilterQuality.medium,
       );
     }
     super.render(canvas);
-  }
-
-  void _paintRim(
-    Canvas canvas,
-    Sprite s, {
-    required double scale,
-    required double blur,
-    required Color tint,
-    required double cx,
-    required double cy,
-  }) {
-    final paint = Paint()
-      ..filterQuality = FilterQuality.medium
-      ..colorFilter = ColorFilter.mode(tint, BlendMode.srcATop)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, blur);
-    canvas.save();
-    canvas.translate(cx, cy);
-    canvas.scale(scale);
-    canvas.translate(-cx, -cy);
-    s.render(canvas, size: size, overridePaint: paint);
-    canvas.restore();
   }
 
   @override

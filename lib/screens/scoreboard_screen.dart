@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/score_service.dart';
+import 'package:runners_rush/widgets/themed_background.dart';
 
 class ScoreboardScreen extends StatefulWidget {
   const ScoreboardScreen({super.key});
@@ -63,11 +64,9 @@ class _ScoreboardScreenState extends State<ScoreboardScreen> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            Image.asset(
-              'assets/images/background_evening.png',
-              fit: BoxFit.cover,
+            const ThemedBackground(
+              child: ColoredBox(color: Color(0x66000000)),
             ),
-            const ColoredBox(color: Color(0x66000000)),
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/screens/consent_screen.dart';
 import 'package:runners_rush/screens/game_over_screen.dart';
@@ -17,6 +18,8 @@ import 'package:runners_rush/services/settings_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Bundle Baloo2 under assets/google_fonts/ — never fetch at runtime (offline OK).
+  GoogleFonts.config.allowRuntimeFetching = false;
   try {
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,

@@ -8,6 +8,7 @@ class AudioService {
   static const jumpSfx = 'jump.mp3';
   static const collisionSfx = 'collision.mp3';
   static const buttonTapSfx = 'button_tap.mp3';
+  static const coinSfx = 'coin.wav';
   static const bgmTrack = 'bgm.mp3';
 
   static bool _prefixReady = false;
@@ -55,6 +56,8 @@ class AudioService {
   }
 
   static void playButtonTap() => play(buttonTapSfx);
+
+  static void playCoin() => play(coinSfx);
 
   static void ensureReady() => _ensurePrefix();
 

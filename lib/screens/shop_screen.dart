@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/shop_service.dart';
+import 'package:runners_rush/widgets/themed_background.dart';
 
 class ShopScreen extends StatefulWidget {
   const ShopScreen({super.key});
@@ -27,7 +28,6 @@ class _ShopScreenState extends State<ShopScreen> {
 
   String _selectedId = CharacterService.male;
   String _selectedBackgroundId = ShopService.eveningId;
-  String _backgroundAsset = 'assets/images/background_evening.png';
   int _coins = 0;
   Set<String> _unlocked = {CharacterService.male};
   Set<String> _unlockedBackgrounds = {ShopService.eveningId};
@@ -54,8 +54,7 @@ class _ShopScreenState extends State<ShopScreen> {
           unlockedSet.contains(selected) ? selected : CharacterService.male;
       _unlockedBackgrounds = unlockedBgs;
       _selectedBackgroundId = selectedBg;
-      _backgroundAsset = ShopService.backgroundById(selectedBg).flutterAsset;
-      debugPrint('[SHOP] selectedBg=$selectedBg, asset=$_backgroundAsset');
+      debugPrint('[SHOP] selectedBg=$selectedBg');
     });
   }
 
@@ -97,10 +96,7 @@ class _ShopScreenState extends State<ShopScreen> {
     if (_unlockedBackgrounds.contains(bg.id)) {
       await ShopService.setSelectedBackground(bg.id);
       if (!mounted) return;
-      setState(() {
-        _selectedBackgroundId = bg.id;
-        _backgroundAsset = bg.flutterAsset;
-      });
+      setState(() => _selectedBackgroundId = bg.id);
       return;
     }
 
@@ -118,7 +114,6 @@ class _ShopScreenState extends State<ShopScreen> {
       _coins = coins;
       _unlockedBackgrounds = unlocked;
       _selectedBackgroundId = bg.id;
-      _backgroundAsset = bg.flutterAsset;
     });
   }
 
@@ -139,11 +134,10 @@ class _ShopScreenState extends State<ShopScreen> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            Image.asset(
-              _backgroundAsset,
-              fit: BoxFit.cover,
+            ThemedBackground(
+              reloadToken: _selectedBackgroundId,
+              child: const ColoredBox(color: Color(0x66000000)),
             ),
-            const ColoredBox(color: Color(0x66000000)),
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),

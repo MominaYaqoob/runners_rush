@@ -112,6 +112,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
         body: Stack(
           fit: StackFit.expand,
           children: [
+            // Fixed evening: consent runs before any shop purchase/theme pick.
             Image.asset(
               'assets/images/background_evening.png',
               fit: BoxFit.cover,

@@ -5,7 +5,7 @@ import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/audio_service.dart';
 import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/score_service.dart';
-import 'package:runners_rush/services/shop_service.dart';
+import 'package:runners_rush/widgets/themed_background.dart';
 
 class GameOverScreen extends StatefulWidget {
   const GameOverScreen({
@@ -38,12 +38,8 @@ class GameOverScreen extends StatefulWidget {
 }
 
 class _GameOverScreenState extends State<GameOverScreen> {
-  static const _defaultBackgroundAsset =
-      'assets/images/background_evening.png';
-
   int? _fallbackBest;
   String _character = CharacterService.male;
-  String _backgroundAsset = _defaultBackgroundAsset;
 
   @override
   void initState() {
@@ -56,24 +52,14 @@ class _GameOverScreenState extends State<GameOverScreen> {
 
   Future<void> _hydrateFromRoute() async {
     final resolved = _resolveArgs();
-    final bgPath = await ShopService.getSelectedBackgroundAssetPath();
-    if (!mounted) return;
 
     if (resolved.hasCharacter) {
-      setState(() {
-        _character = resolved.character;
-        _backgroundAsset = 'assets/images/$bgPath';
-      });
+      setState(() => _character = resolved.character);
     } else {
       final value = await CharacterService.getSelectedCharacter();
       if (!mounted) return;
-      setState(() {
-        _character = value;
-        _backgroundAsset = 'assets/images/$bgPath';
-      });
+      setState(() => _character = value);
     }
-
-    debugPrint('[GAMEOVER] bgPath=$bgPath, finalAsset=$_backgroundAsset');
 
     if (resolved.hasBest) return;
     final value = await ScoreService.getHighScore();
@@ -150,19 +136,17 @@ class _GameOverScreenState extends State<GameOverScreen> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            Image.asset(
-              _backgroundAsset,
-              fit: BoxFit.cover,
-            ),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    Color(0x80000000),
-                    Color(0xB3000000),
-                  ],
+            const ThemedBackground(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Color(0x80000000),
+                      Color(0xB3000000),
+                    ],
+                  ),
                 ),
               ),
             ),
