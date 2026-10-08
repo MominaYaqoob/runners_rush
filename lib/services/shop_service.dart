@@ -60,7 +60,7 @@ class ShopService {
     ShopCharacter(
       id: CharacterService.female,
       name: 'Explorer Female',
-      assetPath: 'assets/images/shop_female_portrait.png',
+      assetPath: 'assets/images/female_run.png',
       price: 10,
     ),
   ];

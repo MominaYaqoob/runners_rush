@@ -140,7 +140,7 @@ class _GameOverScreenState extends State<GameOverScreen> {
     final fallCharacter =
         resolved.hasCharacter ? resolved.character : _character;
     final fallAsset = fallCharacter == CharacterService.female
-        ? 'assets/images/female_fall.png'
+        ? 'assets/images/female_run.png'
         : 'assets/images/male_fall.png';
 
     return AnnotatedRegion<SystemUiOverlayStyle>(

@@ -337,7 +337,7 @@ class _CharacterPreview extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _maleHero = 'assets/images/home_male_hero.png';
-  static const _femaleIdle = 'assets/images/female_idle_1.png';
+  static const _femaleIdle = 'assets/images/female_run.png';
 
   @override
   Widget build(BuildContext context) {
@@ -550,7 +550,7 @@ class _CharacterSelectDialog extends StatefulWidget {
   static const maleAsset = 'assets/images/male_run.png';
   static const femaleAsset = 'assets/images/female_run.png';
   static const malePreview = 'assets/images/male_idle_1.png';
-  static const femalePreview = 'assets/images/female_idle_1.png';
+  static const femalePreview = 'assets/images/female_run.png';
 
   @override
   State<_CharacterSelectDialog> createState() => _CharacterSelectDialogState();
