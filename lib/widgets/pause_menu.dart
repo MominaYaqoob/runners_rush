@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:runners_rush/services/audio_service.dart';
+import 'package:runners_rush/ui/hud_style.dart';
 
 class PauseMenu extends StatelessWidget {
   const PauseMenu({
@@ -40,15 +40,7 @@ class PauseMenu extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    'Paused',
-                    style: GoogleFonts.baloo2(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      height: 1.1,
-                    ),
-                  ),
+                  Text('Paused', style: HudStyle.title(size: 24)),
                   const SizedBox(height: 20),
                   _PauseActionButton(
                     label: 'Resume',
@@ -56,13 +48,13 @@ class PauseMenu extends StatelessWidget {
                     prominent: true,
                     onPressed: onResume,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: HudStyle.space12),
                   _PauseActionButton(
                     label: 'Restart',
                     icon: Icons.replay_rounded,
                     onPressed: onRestart,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: HudStyle.space12),
                   _PauseActionButton(
                     label: 'Home',
                     icon: Icons.home_rounded,
@@ -93,23 +85,17 @@ class _PauseActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        AudioService.playButtonTap();
-        onPressed();
-      },
+    return HudPressable(
+      onPressed: onPressed,
       child: Container(
         width: double.infinity,
+        constraints: const BoxConstraints(minHeight: HudStyle.minTap),
         padding: EdgeInsets.symmetric(
           vertical: prominent ? 12 : 10,
         ),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(26),
-          gradient: prominent
-              ? const LinearGradient(
-                  colors: [Color(0xFFFF8A3D), Color(0xFF6B3FA0)],
-                )
-              : null,
+          gradient: prominent ? HudStyle.playGradient : null,
           color: prominent ? null : Colors.white.withValues(alpha: 0.10),
           border: prominent
               ? null
@@ -117,7 +103,7 @@ class _PauseActionButton extends StatelessWidget {
           boxShadow: prominent
               ? [
                   BoxShadow(
-                    color: const Color(0xFF6B3FA0).withValues(alpha: 0.45),
+                    color: HudStyle.accentPurple.withValues(alpha: 0.45),
                     blurRadius: 14,
                     offset: const Offset(0, 5),
                   ),

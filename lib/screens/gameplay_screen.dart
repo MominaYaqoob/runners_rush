@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
+import 'package:runners_rush/game/shield_painter.dart';
 import 'package:runners_rush/widgets/pause_menu.dart';
 
 class GameplayScreen extends StatefulWidget {
@@ -354,18 +355,10 @@ class _ShieldBadge extends StatelessWidget {
           ),
         ],
       ),
-      child: ColorFiltered(
-        colorFilter: const ColorFilter.mode(
-          Color(0xFF7EC8FF),
-          BlendMode.srcATop,
-        ),
-        child: Image.asset(
-          'assets/images/coin.png',
-          width: 22,
-          height: 22,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.medium,
-        ),
+      child: const SizedBox(
+        width: 22,
+        height: 22,
+        child: CustomPaint(painter: ShieldIconPainter()),
       ),
     );
   }

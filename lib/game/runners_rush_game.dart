@@ -31,16 +31,22 @@ class RunnersRushGame extends FlameGame
   static const minSpawnInterval = 1.0;
   /// Minimum seconds between obstacle arrivals at the player.
   static const minArrivalGap = 1.5;
-  /// Gap between coin and obstacle arrivals (seconds).
-  static const coinObstacleArrivalGap = 0.8;
+  /// Coin must arrive ≥ this many seconds from every hazard (obstacles + shields).
+  static const coinHazardArrivalGap = 1.1;
   static const flyingAtLeastEvery = 4;
-  static const flyingChance = 0.25;
-  static const coinGroupSpacingFactor = 0.16;
-  static const coinFirstSpawnMin = 3.0;
-  static const coinSpawnIntervalMin = 4.0;
-  static const coinSpawnIntervalMax = 7.0;
-  static const coinGroupMinCount = 3;
-  static const coinGroupMaxCount = 5;
+  /// Spawn mix: ground 55%, low flyer 20%, high flyer 25%.
+  static const groundSpawnWeight = 0.55;
+  static const lowFlyerSpawnWeight = 0.20;
+  static const highFlyerSpawnWeight = 0.25;
+  /// After a ground/low (jump) obstacle, no high flyer within this arrival gap.
+  static const highFlyerAfterJumpObstacleGap = 1.3;
+  /// First single ground coin appears after this many seconds.
+  static const coinFirstSpawnMin = 6.0;
+  static const coinSpawnIntervalMin = 9.0;
+  static const coinSpawnIntervalMax = 15.0;
+  /// Player body AABB scale used when sweeping coin collection.
+  static const coinCollectInflate = 1.15;
+  static const coinNearLandingSeconds = 0.12;
   static const shieldSpawnIntervalMin = 25.0;
   static const shieldSpawnIntervalMax = 40.0;
 
@@ -66,6 +72,7 @@ class RunnersRushGame extends FlameGame
   bool _isGameOver = false;
   double currentSpeed = initialSpeed;
   int _spawnsSinceFlying = 0;
+  int _consecutiveFlyers = 0;
   String? _lastGroundSprite;
   String? _secondLastGroundSprite;
 
@@ -98,26 +105,12 @@ class RunnersRushGame extends FlameGame
     return true;
   }
 
-  /// World positions for a coin group (flat run-line or jump arc).
-  static List<Vector2> coinGroupPositions({
-    required int count,
-    required bool arc,
-    required double startX,
-    required double baseY,
-    required double spacing,
-    required double arcHeight,
+  /// Swept coin AABB vs inflated player body (pure helper for gameplay + tests).
+  static bool sweptCoinOverlapsPlayer({
+    required Rect coinSweep,
+    required Rect playerBody,
   }) {
-    final clamped = count.clamp(coinGroupMinCount, coinGroupMaxCount);
-    final positions = <Vector2>[];
-    for (var i = 0; i < clamped; i++) {
-      final x = startX + i * spacing;
-      var y = baseY;
-      if (arc && clamped > 1) {
-        y = baseY - arcHeight * sin(pi * i / (clamped - 1));
-      }
-      positions.add(Vector2(x, y));
-    }
-    return positions;
+    return coinSweep.overlaps(playerBody);
   }
 
   @override
@@ -159,7 +152,7 @@ class RunnersRushGame extends FlameGame
     );
     _coinTimer = Timer(
       coinFirstSpawnMin,
-      onTick: _spawnCoinGroup,
+      onTick: _spawnCoin,
       repeat: true,
     );
     _shieldTimer = Timer(
@@ -187,6 +180,26 @@ class RunnersRushGame extends FlameGame
     _spawnTimer.update(dt);
     _coinTimer.update(dt);
     _shieldTimer.update(dt);
+    _collectCoinsSwept();
+  }
+
+  /// Reliable coin pickup: swept X motion vs inflated player body.
+  void _collectCoinsSwept() {
+    if (!player.canCollectGroundCoin(
+      nearLandingSeconds: coinNearLandingSeconds,
+    )) {
+      return;
+    }
+    final body = player.bodyWorldRect(inflateFactor: coinCollectInflate);
+    for (final coin in world.children.whereType<CoinComponent>().toList()) {
+      if (coin.isCollected) continue;
+      if (sweptCoinOverlapsPlayer(
+        coinSweep: coin.sweepCollectionRect(),
+        playerBody: body,
+      )) {
+        coin.collect();
+      }
+    }
   }
 
   @override
@@ -290,8 +303,10 @@ class RunnersRushGame extends FlameGame
     if (_isGameOver) return;
     _spawnTimer.limit = _nextSpawnInterval();
 
-    final forceFlying = (_spawnsSinceFlying + 1) >= flyingAtLeastEvery;
-    final flying = forceFlying || _random.nextDouble() < flyingChance;
+    final kind = _pickObstacleKind();
+    final flying = kind != _ObstacleKind.ground;
+    final flyingLane =
+        kind == _ObstacleKind.lowFlyer ? FlyingLane.low : FlyingLane.high;
     final spritePath = flying ? _flyingSprite : _pickGroundSprite();
     final speed = flying
         ? currentSpeed * ObstacleComponent.flyingSpeedMultiplier
@@ -299,8 +314,18 @@ class RunnersRushGame extends FlameGame
 
     if (!_hasEnoughArrivalSpacing(speed)) return;
 
-    _spawnsSinceFlying = flying ? 0 : _spawnsSinceFlying + 1;
-    if (!flying) {
+    if (kind == _ObstacleKind.highFlyer) {
+      final playerX = player.position.x;
+      final eta = (size.x - playerX) / speed;
+      if (!_highFlyerAfterJumpFair(eta, playerX)) return;
+    }
+
+    if (flying) {
+      _consecutiveFlyers++;
+      _spawnsSinceFlying = 0;
+    } else {
+      _consecutiveFlyers = 0;
+      _spawnsSinceFlying++;
       _secondLastGroundSprite = _lastGroundSprite;
       _lastGroundSprite = spritePath;
     }
@@ -309,64 +334,98 @@ class RunnersRushGame extends FlameGame
       ObstacleComponent(
         spritePath: spritePath,
         flying: flying,
+        flyingLane: flyingLane,
         speed: speed,
       ),
     );
   }
 
-  void _spawnCoinGroup() {
-    if (_isGameOver) return;
-    _coinTimer.limit = coinSpawnIntervalMin +
-        _random.nextDouble() * (coinSpawnIntervalMax - coinSpawnIntervalMin);
+  /// Ground 55% / low 20% / high 25%. Never 3 flyers in a row; flyer at least
+  /// every [flyingAtLeastEvery] spawns.
+  _ObstacleKind _pickObstacleKind() {
+    final forceFlyer = (_spawnsSinceFlying + 1) >= flyingAtLeastEvery;
+    if (_consecutiveFlyers >= 2) {
+      return _ObstacleKind.ground;
+    }
+    if (forceFlyer) {
+      final flyerTotal = lowFlyerSpawnWeight + highFlyerSpawnWeight;
+      return _random.nextDouble() < (lowFlyerSpawnWeight / flyerTotal)
+          ? _ObstacleKind.lowFlyer
+          : _ObstacleKind.highFlyer;
+    }
+    final r = _random.nextDouble();
+    if (r < groundSpawnWeight) return _ObstacleKind.ground;
+    if (r < groundSpawnWeight + lowFlyerSpawnWeight) {
+      return _ObstacleKind.lowFlyer;
+    }
+    return _ObstacleKind.highFlyer;
+  }
 
-    final count = coinGroupMinCount +
-        _random.nextInt(coinGroupMaxCount - coinGroupMinCount + 1);
-    final arc = _random.nextBool();
+  /// High flyer must not arrive within [highFlyerAfterJumpObstacleGap] after a
+  /// ground or low flyer (player still airborne from jumping those).
+  bool _highFlyerAfterJumpFair(double candidateEta, double playerX) {
+    for (final o in world.children.whereType<ObstacleComponent>()) {
+      if (!o.isJumpObstacle) continue;
+      final eta = (o.position.x - playerX) / o.speed;
+      if (candidateEta >= eta &&
+          candidateEta - eta < highFlyerAfterJumpObstacleGap) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _spawnCoin() {
+    if (_isGameOver) return;
+    _coinTimer.limit = _nextCoinInterval();
+
     final speed = currentSpeed;
     if (speed <= 0) return;
 
     final playerX = player.position.x;
+    final startX = size.x + size.y * 0.12;
     final groundY = size.y * (1 - PlayerComponent.groundHeightRatio);
     final playerH = size.y * PlayerComponent.heightRatio;
-    final baseY =
-        groundY - playerH * PlayerComponent.hitboxCenterYFromFeet;
-    final spacing = size.y * coinGroupSpacingFactor;
-    final startX = size.x + spacing;
-    final arcHeight = PlayerComponent.jumpPeakHeight * 0.75;
+    // Straight run-line only (same height as standing torso/hitbox center).
+    final y = groundY - playerH * PlayerComponent.hitboxCenterYFromFeet;
+    final eta = (startX - playerX) / speed;
 
-    final positions = coinGroupPositions(
-      count: count,
-      arc: arc,
-      startX: startX,
-      baseY: baseY,
-      spacing: spacing,
-      arcHeight: arcHeight,
+    // Skip this spawn if unsafe — do not retry until the next timer tick.
+    if (!_coinArrivalSafe(eta, playerX)) return;
+
+    world.add(
+      CoinComponent(
+        speed: speed,
+        spawnPosition: Vector2(startX, y),
+      ),
     );
+  }
 
-    final coinEtas =
-        positions.map((p) => (p.x - playerX) / speed).toList(growable: false);
-    final obstacleEtas = _obstacleEtas(playerX);
-    final shieldEtas = _shieldEtas(playerX);
-    for (final eta in coinEtas) {
-      if (!arrivalGapOk(
-        candidateEta: eta,
-        existingEtas: obstacleEtas,
-        minGap: coinObstacleArrivalGap,
-      )) {
-        return;
-      }
-      if (!arrivalGapOk(
-        candidateEta: eta,
-        existingEtas: shieldEtas,
-        minGap: coinObstacleArrivalGap,
-      )) {
-        return;
-      }
+  bool _coinArrivalSafe(double candidateEta, double playerX) {
+    if (!arrivalGapOk(
+      candidateEta: candidateEta,
+      existingEtas: _obstacleEtas(playerX),
+      minGap: coinHazardArrivalGap,
+    )) {
+      return false;
     }
+    if (!arrivalGapOk(
+      candidateEta: candidateEta,
+      existingEtas: _shieldEtas(playerX),
+      minGap: coinHazardArrivalGap,
+    )) {
+      return false;
+    }
+    return arrivalGapOk(
+      candidateEta: candidateEta,
+      existingEtas: _coinEtas(playerX),
+      minGap: coinHazardArrivalGap,
+    );
+  }
 
-    for (final pos in positions) {
-      world.add(CoinComponent(speed: speed, spawnPosition: pos));
-    }
+  double _nextCoinInterval() {
+    return coinSpawnIntervalMin +
+        _random.nextDouble() * (coinSpawnIntervalMax - coinSpawnIntervalMin);
   }
 
   void _spawnShield() {
@@ -392,14 +451,14 @@ class RunnersRushGame extends FlameGame
     if (!arrivalGapOk(
       candidateEta: eta,
       existingEtas: _coinEtas(playerX),
-      minGap: coinObstacleArrivalGap,
+      minGap: coinHazardArrivalGap,
     )) {
       return;
     }
     if (!arrivalGapOk(
       candidateEta: eta,
       existingEtas: _shieldEtas(playerX),
-      minGap: coinObstacleArrivalGap,
+      minGap: coinHazardArrivalGap,
     )) {
       return;
     }
@@ -440,14 +499,14 @@ class RunnersRushGame extends FlameGame
     if (!arrivalGapOk(
       candidateEta: candidateEta,
       existingEtas: _coinEtas(playerX),
-      minGap: coinObstacleArrivalGap,
+      minGap: coinHazardArrivalGap,
     )) {
       return false;
     }
     return arrivalGapOk(
       candidateEta: candidateEta,
       existingEtas: _shieldEtas(playerX),
-      minGap: coinObstacleArrivalGap,
+      minGap: coinHazardArrivalGap,
     );
   }
 
@@ -469,3 +528,5 @@ class RunnersRushGame extends FlameGame
         );
   }
 }
+
+enum _ObstacleKind { ground, lowFlyer, highFlyer }

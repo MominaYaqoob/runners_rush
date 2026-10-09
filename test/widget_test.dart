@@ -145,7 +145,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(_homePreviewAsset(tester), 'assets/images/female_run.png');
+    expect(_homePreviewAsset(tester), 'assets/images/home_female_hero.png');
   });
 
   testWidgets('home play shop settings and character select', (WidgetTester tester) async {

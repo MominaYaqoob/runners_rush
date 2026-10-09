@@ -27,9 +27,9 @@ enum ObstacleHitOutcome {
 /// Runner with a looping run cycle and a one-shot jump sequence.
 class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     with CollisionCallbacks, HasGameReference<RunnersRushGame> {
-  static const gravity = 1060.0;
-  /// Tuned so peak stays on phone landscape (~170px rise), not off-screen.
-  static const jumpVelocity = -600.0;
+  /// Snappy jump: peak ≈ 151px, air time ≈ 0.70s.
+  static const gravity = 2450.0;
+  static const jumpVelocity = -860.0;
   static const groundHeightRatio = 0.165;
   static const heightRatio = 0.32;
   static const xRatio = 0.15;
@@ -75,8 +75,9 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
   static double get jumpPeakHeight =>
       jumpVelocity * jumpVelocity / (2 * gravity);
   static const runStepTime = 0.08;
-  static const jumpStartDuration = 0.12;
-  static const jumpLandDuration = 0.14;
+  /// Scaled with shorter air time (was 0.12 / 0.14 at the old jump).
+  static const jumpStartDuration = 0.074;
+  static const jumpLandDuration = 0.087;
   static const jumpAirStepTime = 0.08;
   /// How long a jump tap is remembered while airborne / landing.
   static const jumpBufferSeconds = 0.15;
@@ -128,6 +129,45 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
 
   bool get isOnGround =>
       velocityY >= 0 && (position.y - groundY).abs() <= 0.5;
+
+  /// True when grounded or falling and about to land within [nearLandingSeconds].
+  bool canCollectGroundCoin({double nearLandingSeconds = 0.12}) {
+    return eligibleForGroundCoin(
+      isOnGround: isOnGround,
+      feetY: position.y,
+      groundY: groundY,
+      velocityY: velocityY,
+      nearLandingSeconds: nearLandingSeconds,
+    );
+  }
+
+  /// Pure eligibility check used by gameplay and unit tests.
+  @visibleForTesting
+  static bool eligibleForGroundCoin({
+    required bool isOnGround,
+    required double feetY,
+    required double groundY,
+    required double velocityY,
+    double nearLandingSeconds = 0.12,
+  }) {
+    if (isOnGround) return true;
+    if (velocityY <= 0) return false;
+    final dy = groundY - feetY;
+    if (dy <= 0) return true;
+    return dy / velocityY <= nearLandingSeconds;
+  }
+
+  /// Player body AABB in world space (optionally scaled by [inflateFactor]).
+  Rect bodyWorldRect({double inflateFactor = 1.0}) {
+    final box = hitboxSizeFor(size, jumping: !isOnGround);
+    final offset = hitboxCenterOffset(size, jumping: !isOnGround);
+    final center = Offset(position.x + offset.x, position.y + offset.y);
+    return Rect.fromCenter(
+      center: center,
+      width: box.x * inflateFactor,
+      height: box.y * inflateFactor,
+    );
+  }
 
   bool get _canJump =>
       canJumpNow(current: current, isOnGround: isOnGround, hit: _hit);

@@ -11,11 +11,15 @@ const _flyingAspect = 895 / 251;
 const _groundAspect = 819 / 364;
 
 void main() {
-  test('jump peak is about 170px from velocity and gravity', () {
-    expect(PlayerComponent.jumpPeakHeight, closeTo(169.81, 0.05));
+  test('jump peak matches PlayerComponent gravity and jumpVelocity', () {
+    final expected = PlayerComponent.jumpVelocity *
+        PlayerComponent.jumpVelocity /
+        (2 * PlayerComponent.gravity);
+    expect(PlayerComponent.jumpPeakHeight, closeTo(expected, 0.01));
+    expect(PlayerComponent.jumpPeakHeight, closeTo(150.94, 0.5));
   });
 
-  test('flying sits above standing run; jump path crosses the shaft at 800x360', () {
+  test('high flyer sits above standing run; jump path crosses the shaft at 800x360', () {
     const h = 360.0;
     final groundY = h * (1 - PlayerComponent.groundHeightRatio);
     final playerH = h * PlayerComponent.heightRatio;
@@ -29,18 +33,40 @@ void main() {
     );
     final flying = _obstacleAabb(
       cx: 0,
-      bottom: ObstacleComponent.flyingBottomY(h, obsH),
+      bottom: ObstacleComponent.flyingBottomY(h, obsH, lane: FlyingLane.high),
       spriteSize: Vector2(obsW, obsH),
       flying: true,
     );
     final peakBottom = PlayerComponent.jumpPeakHitboxBottom(h);
-    final flyingBottom = ObstacleComponent.flyingHitboxBottom(h, obsH);
-    final flyingTop = ObstacleComponent.flyingHitboxTop(h, obsH);
+    final flyingBottom =
+        ObstacleComponent.flyingHitboxBottom(h, obsH, lane: FlyingLane.high);
+    final flyingTop =
+        ObstacleComponent.flyingHitboxTop(h, obsH, lane: FlyingLane.high);
 
     expect(standing.overlaps(flying), isFalse);
     expect(flyingBottom, lessThan(standing.top));
     // Peak goes above the shaft; ascent/descent still crosses its band.
     expect(peakBottom, lessThan(flyingTop));
+  });
+
+  test('low flyer hitbox center is about 0.35–0.45 of player height', () {
+    const h = 360.0;
+    final groundY = h * (1 - PlayerComponent.groundHeightRatio);
+    final playerH = h * PlayerComponent.heightRatio;
+    final obsH = h * ObstacleComponent.flyingHeightRatio;
+    final bottom =
+        ObstacleComponent.flyingBottomY(h, obsH, lane: FlyingLane.low);
+    final offset = ObstacleComponent.hitboxCenterOffset(
+      Vector2(obsH, obsH),
+      flying: true,
+    );
+    final centerFromFeet = groundY - (bottom + offset.y);
+    final ratio = centerFromFeet / playerH;
+    expect(ratio, inInclusiveRange(0.35, 0.45));
+    expect(
+      ObstacleComponent.flyingLowCenterFromPlayerFeet,
+      inInclusiveRange(0.35, 0.45),
+    );
   });
 
   test('speed rises 20 every 10 seconds and caps at 500', () {
@@ -57,27 +83,39 @@ void main() {
     expect(RunnersRushGame.spawnScaleAt(500), closeTo(0.4, 0.001));
   });
 
+  test('spawn mix weights are ground 55 / low 20 / high 25', () {
+    expect(RunnersRushGame.groundSpawnWeight, 0.55);
+    expect(RunnersRushGame.lowFlyerSpawnWeight, 0.20);
+    expect(RunnersRushGame.highFlyerSpawnWeight, 0.25);
+    expect(
+      RunnersRushGame.groundSpawnWeight +
+          RunnersRushGame.lowFlyerSpawnWeight +
+          RunnersRushGame.highFlyerSpawnWeight,
+      closeTo(1.0, 0.001),
+    );
+  });
+
   for (final size in const [
     _Size(800, 360),
     _Size(844, 390),
     _Size(915, 412),
   ]) {
-    test('running clears flying arrow at ${size.w.toInt()}x${size.h.toInt()}', () {
+    test('running clears high flyer at ${size.w.toInt()}x${size.h.toInt()}', () {
       final result = _simulate(
         size: size,
         jumpLeadSeconds: null,
         flying: true,
+        lane: FlyingLane.high,
       );
       expect(
         result.hit,
         isFalse,
         reason:
-            'running should duck under flying at ${size.w}x${size.h}: ${result.debug}',
+            'running should duck under high flyer at ${size.w}x${size.h}: ${result.debug}',
       );
     });
 
-    test('timed jump hits flying arrow at ${size.w.toInt()}x${size.h.toInt()}', () {
-      // Try a few leads — contact must happen during ascent through the shaft.
+    test('timed jump hits high flyer at ${size.w.toInt()}x${size.h.toInt()}', () {
       var hit = false;
       String debug = '';
       for (final lead in const [0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.20, 0.22]) {
@@ -85,6 +123,7 @@ void main() {
           size: size,
           jumpLeadSeconds: lead,
           flying: true,
+          lane: FlyingLane.high,
         );
         debug = result.debug;
         if (result.hit) {
@@ -96,14 +135,70 @@ void main() {
         hit,
         isTrue,
         reason:
-            'jump should hit overhead flying at ${size.w}x${size.h}: $debug',
+            'jump should hit high flyer at ${size.w}x${size.h}: $debug',
       );
     });
 
-    test('jump peak clears flying arrow band check at ${size.w.toInt()}x${size.h.toInt()}', () {
+    test('running hits low flyer at ${size.w.toInt()}x${size.h.toInt()}', () {
+      final result = _simulate(
+        size: size,
+        jumpLeadSeconds: null,
+        flying: true,
+        lane: FlyingLane.low,
+      );
+      expect(
+        result.hit,
+        isTrue,
+        reason:
+            'running should hit low flyer at ${size.w}x${size.h}: ${result.debug}',
+      );
+    });
+
+    test('timed jump clears low flyer at ${size.w.toInt()}x${size.h.toInt()}', () {
+      var cleared = false;
+      String debug = '';
+      for (final lead in const [
+        0.10,
+        0.14,
+        0.18,
+        0.22,
+        0.26,
+        0.30,
+        0.34,
+        0.38,
+      ]) {
+        final result = _simulate(
+          size: size,
+          jumpLeadSeconds: lead,
+          flying: true,
+          lane: FlyingLane.low,
+        );
+        debug = result.debug;
+        if (!result.hit) {
+          cleared = true;
+          break;
+        }
+      }
+      expect(
+        cleared,
+        isTrue,
+        reason:
+            'jump should clear low flyer at ${size.w}x${size.h}: $debug',
+      );
+    });
+
+    test('jump peak clears high flyer band check at ${size.w.toInt()}x${size.h.toInt()}', () {
       final obsH = size.h * ObstacleComponent.flyingHeightRatio;
-      final flyingTop = ObstacleComponent.flyingHitboxTop(size.h, obsH);
-      final flyingBottom = ObstacleComponent.flyingHitboxBottom(size.h, obsH);
+      final flyingTop = ObstacleComponent.flyingHitboxTop(
+        size.h,
+        obsH,
+        lane: FlyingLane.high,
+      );
+      final flyingBottom = ObstacleComponent.flyingHitboxBottom(
+        size.h,
+        obsH,
+        lane: FlyingLane.high,
+      );
       final peakBottom = PlayerComponent.jumpPeakHitboxBottom(size.h);
       final groundY = size.h * (1 - PlayerComponent.groundHeightRatio);
       final playerH = size.h * PlayerComponent.heightRatio;
@@ -118,16 +213,35 @@ void main() {
     });
 
     test('timed jump clears ground obstacle at ${size.w.toInt()}x${size.h.toInt()}', () {
-      final result = _simulate(
-        size: size,
-        jumpLeadSeconds: 0.28,
-        flying: false,
-      );
+      var cleared = false;
+      String debug = '';
+      // Snappier jump (~0.7s air): jump later so peak lines up with the hazard.
+      for (final lead in const [
+        0.12,
+        0.16,
+        0.18,
+        0.20,
+        0.22,
+        0.24,
+        0.26,
+        0.28,
+      ]) {
+        final result = _simulate(
+          size: size,
+          jumpLeadSeconds: lead,
+          flying: false,
+        );
+        debug = result.debug;
+        if (!result.hit) {
+          cleared = true;
+          break;
+        }
+      }
       expect(
-        result.hit,
-        isFalse,
+        cleared,
+        isTrue,
         reason:
-            'jump should clear ground obstacle at ${size.w}x${size.h}: ${result.debug}',
+            'jump should clear ground obstacle at ${size.w}x${size.h}: $debug',
       );
     });
 
@@ -220,6 +334,7 @@ _SimResult _simulate({
   required _Size size,
   required double? jumpLeadSeconds,
   required bool flying,
+  FlyingLane lane = FlyingLane.high,
 }) {
   final groundY = size.h * (1 - PlayerComponent.groundHeightRatio);
   final playerH = size.h * PlayerComponent.heightRatio;
@@ -234,7 +349,7 @@ _SimResult _simulate({
   final obsW = obsH * (flying ? _flyingAspect : _groundAspect);
   final obsSize = Vector2(obsW, obsH);
   final obsBottom = flying
-      ? ObstacleComponent.flyingBottomY(size.h, obsH)
+      ? ObstacleComponent.flyingBottomY(size.h, obsH, lane: lane)
       : groundY;
   var obsX = size.w + obsW / 2;
 
@@ -260,6 +375,7 @@ _SimResult _simulate({
         'obsBottom=${obsBottom.toStringAsFixed(1)} '
         'obsH=${obsH.toStringAsFixed(1)} obsW=${obsW.toStringAsFixed(1)} '
         'dx=${(obsX - playerX).toStringAsFixed(1)} '
+        'lane=$lane '
         'jumpPeak=${PlayerComponent.jumpPeakHeight.toStringAsFixed(1)}';
   }
 

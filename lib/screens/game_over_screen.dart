@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
-import 'package:runners_rush/services/audio_service.dart';
 import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/score_service.dart';
+import 'package:runners_rush/ui/hud_style.dart';
 import 'package:runners_rush/widgets/themed_background.dart';
 
 class GameOverScreen extends StatefulWidget {
@@ -29,9 +29,6 @@ class GameOverScreen extends StatefulWidget {
     systemNavigationBarIconBrightness: Brightness.light,
     systemNavigationBarDividerColor: Colors.transparent,
   );
-
-  static const _hudFill = Color(0x66000000);
-  static const _hudBorder = Color(0x26FFFFFF);
 
   @override
   State<GameOverScreen> createState() => _GameOverScreenState();
@@ -126,7 +123,7 @@ class _GameOverScreenState extends State<GameOverScreen> {
     final fallCharacter =
         resolved.hasCharacter ? resolved.character : _character;
     final fallAsset = fallCharacter == CharacterService.female
-        ? 'assets/images/female_run.png'
+        ? 'assets/images/female_fall.png'
         : 'assets/images/male_fall.png';
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -152,30 +149,44 @@ class _GameOverScreenState extends State<GameOverScreen> {
             ),
             SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 24, 14),
+                padding: const EdgeInsets.fromLTRB(
+                  HudStyle.space16,
+                  HudStyle.space12,
+                  HudStyle.space16,
+                  HudStyle.space12,
+                ),
                 child: Row(
                   children: [
                     Expanded(
                       flex: 5,
-                      child: Align(
-                        alignment: const Alignment(-0.15, 0.15),
-                        child: Image.asset(
-                          fallAsset,
-                          height: MediaQuery.sizeOf(context).height * 0.82,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Image.asset(
-                              'assets/images/male_fall.png',
-                              height:
-                                  MediaQuery.sizeOf(context).height * 0.82,
-                              fit: BoxFit.contain,
-                              filterQuality: FilterQuality.high,
-                            );
-                          },
-                        ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return Align(
+                            alignment: const Alignment(-0.1, 0.2),
+                            child: SizedBox(
+                              width: constraints.maxWidth,
+                              height: constraints.maxHeight,
+                              child: Image.asset(
+                                fallAsset,
+                                key: const ValueKey('game-over-fall'),
+                                fit: BoxFit.contain,
+                                alignment: Alignment.bottomCenter,
+                                filterQuality: FilterQuality.high,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Image.asset(
+                                    'assets/images/male_fall.png',
+                                    fit: BoxFit.contain,
+                                    alignment: Alignment.bottomCenter,
+                                    filterQuality: FilterQuality.high,
+                                  );
+                                },
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
+                    const SizedBox(width: HudStyle.space12),
                     Expanded(
                       flex: 6,
                       child: _ResultsPanel(
@@ -260,26 +271,10 @@ class _ResultsPanel extends StatelessWidget {
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: GameOverScreen._hudFill,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: GameOverScreen._hudBorder),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x59000000),
-                blurRadius: 12,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
+          decoration: HudStyle.panel(),
           child: Text(
             'Score: $score',
-            style: GoogleFonts.baloo2(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-              height: 1.1,
-            ),
+            style: HudStyle.body(size: 20, weight: FontWeight.w700),
           ),
         ),
         const SizedBox(height: 10),
@@ -381,21 +376,16 @@ class _RestartButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        AudioService.playButtonTap();
-        onPressed();
-      },
+    return HudPressable(
+      onPressed: onPressed,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFF8A3D), Color(0xFF6B3FA0)],
-          ),
+          gradient: HudStyle.playGradient,
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF6B3FA0).withValues(alpha: 0.5),
+              color: HudStyle.accentPurple.withValues(alpha: 0.5),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -430,18 +420,11 @@ class _HomeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        AudioService.playButtonTap();
-        onPressed();
-      },
+    return HudPressable(
+      onPressed: onPressed,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          color: GameOverScreen._hudFill,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
-        ),
+        decoration: HudStyle.panel(radius: 24),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -449,12 +432,7 @@ class _HomeButton extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               'Home',
-              style: GoogleFonts.baloo2(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                height: 1,
-              ),
+              style: HudStyle.body(size: 15, weight: FontWeight.w700),
             ),
           ],
         ),

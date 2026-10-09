@@ -5,7 +5,7 @@ import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
 
-/// Scrolling collectible. Moves with the run speed and spins via [scale.x].
+/// Single scrolling collectible on the run-line. Moves with run speed.
 class CoinComponent extends SpriteComponent
     with CollisionCallbacks, HasGameReference<RunnersRushGame> {
   CoinComponent({
@@ -20,6 +20,9 @@ class CoinComponent extends SpriteComponent
   final double speed;
   bool _collected = false;
   double _spinT = 0;
+  double? _prevX;
+
+  bool get isCollected => _collected;
 
   @override
   Future<void> onLoad() async {
@@ -31,6 +34,7 @@ class CoinComponent extends SpriteComponent
     if (src.y > 0) {
       width = height * (src.x / src.y);
     }
+    _prevX = position.x;
     await add(
       RectangleHitbox(
         size: Vector2(width * hitboxScale, height * hitboxScale),
@@ -43,14 +47,31 @@ class CoinComponent extends SpriteComponent
 
   @override
   void update(double dt) {
+    _prevX = position.x;
     super.update(dt);
     position.x -= speed * dt;
     _spinT += dt * 6;
-    // Oscillate scale.x between 0.4 and 1.0 for a simple spin.
     scale.x = 0.7 + 0.3 * sin(_spinT);
     if (position.x < -width) {
       removeFromParent();
     }
+  }
+
+  /// Axis-aligned collectible box at [x] (ignores spin scale).
+  Rect collectionRectAt(double x) {
+    final w = width * hitboxScale;
+    final h = height * hitboxScale;
+    return Rect.fromCenter(
+      center: Offset(x, position.y),
+      width: w,
+      height: h,
+    );
+  }
+
+  /// Swept AABB covering previous → current X for this frame.
+  Rect sweepCollectionRect() {
+    final prev = _prevX ?? position.x;
+    return collectionRectAt(prev).expandToInclude(collectionRectAt(position.x));
   }
 
   void collect() {

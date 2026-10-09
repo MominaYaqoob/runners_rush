@@ -54,7 +54,11 @@ class ShopService {
 
   // --- Economy (tune rates/prices here) ---
   /// Score points needed per coin from a finished run (~2s at 10 pts/s).
+  /// Raise to grant more score-based coins when in-run pickups are rarer.
   static const scorePerRunCoin = 20;
+  /// Credits per coin collected during a run (prices unchanged).
+  /// Raise later if single ground coins need a bigger payout.
+  static const inRunCoinCredit = 1;
   static const malePrice = 0;
   static const femalePrice = 10;
   static const eveningPrice = 0;
@@ -73,7 +77,7 @@ class ShopService {
   static const defaultUnlockedBackgrounds = [eveningId];
 
   static int coinsForRun({required int score, int collected = 0}) =>
-      score ~/ scorePerRunCoin + collected;
+      score ~/ scorePerRunCoin + collected * inRunCoinCredit;
 
   static const characters = <ShopCharacter>[
     ShopCharacter(
@@ -85,7 +89,7 @@ class ShopService {
     ShopCharacter(
       id: CharacterService.female,
       name: 'Explorer Female',
-      assetPath: 'assets/images/female_run.png',
+      assetPath: 'assets/images/shop_female_portrait.png',
       price: femalePrice,
     ),
   ];

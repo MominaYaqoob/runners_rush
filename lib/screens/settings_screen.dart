@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/audio_service.dart';
 import 'package:runners_rush/services/settings_service.dart';
+import 'package:runners_rush/ui/hud_style.dart';
 import 'package:runners_rush/widgets/themed_background.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -23,10 +24,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     systemNavigationBarDividerColor: Colors.transparent,
   );
 
-  static const hudFill = Color(0x66000000);
-  static const hudBorder = Color(0x26FFFFFF);
-  static const _accentOrange = Color(0xFFFF8A3D);
-  static const _accentPurple = Color(0xFF6B3FA0);
+  static const _accentOrange = HudStyle.accentOrange;
+  static const _accentPurple = HudStyle.accentPurple;
 
   bool _soundEffects = true;
   bool _backgroundMusic = true;
@@ -180,8 +179,8 @@ class _TopBar extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _SettingsScreenState.hudFill,
-                  border: Border.all(color: _SettingsScreenState.hudBorder),
+                  color: HudStyle.fill,
+                  border: Border.all(color: HudStyle.borderColor),
                   boxShadow: const [
                     BoxShadow(
                       color: Color(0x59000000),
@@ -231,9 +230,9 @@ class _SettingsCard extends StatelessWidget {
     final card = Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: _SettingsScreenState.hudFill,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _SettingsScreenState.hudBorder),
+        color: HudStyle.fill,
+        borderRadius: BorderRadius.circular(HudStyle.radius),
+        border: Border.all(color: HudStyle.borderColor),
         boxShadow: const [
           BoxShadow(
             color: Color(0x59000000),

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/shop_service.dart';
+import 'package:runners_rush/ui/hud_style.dart';
 import 'package:runners_rush/widgets/themed_background.dart';
 
 class ShopScreen extends StatefulWidget {
@@ -22,9 +23,6 @@ class _ShopScreenState extends State<ShopScreen> {
     systemNavigationBarIconBrightness: Brightness.light,
     systemNavigationBarDividerColor: Colors.transparent,
   );
-
-  static const hudFill = Color(0x66000000);
-  static const hudBorder = Color(0x26FFFFFF);
 
   String _selectedId = CharacterService.male;
   String _selectedBackgroundId = ShopService.eveningId;
@@ -216,8 +214,8 @@ class _ShopScreenState extends State<ShopScreen> {
                     ),
                     decoration: BoxDecoration(
                       color: const Color(0xE6000000),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: hudBorder),
+                      borderRadius: BorderRadius.circular(HudStyle.radius),
+                      border: Border.all(color: HudStyle.borderColor),
                     ),
                     child: Text(
                       _toast!,
@@ -289,8 +287,8 @@ class _TopBar extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _ShopScreenState.hudFill,
-                  border: Border.all(color: _ShopScreenState.hudBorder),
+                  color: HudStyle.fill,
+                  border: Border.all(color: HudStyle.borderColor),
                   boxShadow: const [
                     BoxShadow(
                       color: Color(0x59000000),
@@ -328,9 +326,9 @@ class _TopBar extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.fromLTRB(8, 6, 12, 6),
               decoration: BoxDecoration(
-                color: _ShopScreenState.hudFill,
+                color: HudStyle.fill,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _ShopScreenState.hudBorder),
+                border: Border.all(color: HudStyle.borderColor),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -381,28 +379,29 @@ class _SkinCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
         color: const Color(0x73000000),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(HudStyle.radius),
         border: Border.all(
           color: selected
-              ? const Color(0xFFFF8A3D)
-              : _ShopScreenState.hudBorder,
+              ? HudStyle.accentOrange
+              : HudStyle.borderColor,
           width: selected ? 2 : 1,
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x59000000),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
+        boxShadow: HudStyle.shadow,
       ),
       child: Column(
         children: [
           Expanded(
-            child: Image.asset(
-              skin.assetPath,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.high,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Image.asset(
+                  skin.assetPath,
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.bottomCenter,
+                  filterQuality: FilterQuality.high,
+                );
+              },
             ),
           ),
           const SizedBox(height: 6),
@@ -481,7 +480,7 @@ class _BackgroundCard extends StatelessWidget {
         border: Border.all(
           color: selected
               ? const Color(0xFFFF8A3D)
-              : _ShopScreenState.hudBorder,
+              : HudStyle.borderColor,
           width: selected ? 2 : 1,
         ),
       ),

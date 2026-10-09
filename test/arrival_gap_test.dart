@@ -74,4 +74,9 @@ void main() {
       isTrue,
     );
   });
+
+  test('high flyer after jump-obstacle uses 1.3s fairness gap', () {
+    expect(RunnersRushGame.highFlyerAfterJumpObstacleGap, 1.3);
+    expect(RunnersRushGame.minArrivalGap, 1.5);
+  });
 }
