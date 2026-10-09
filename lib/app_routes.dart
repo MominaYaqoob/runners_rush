@@ -8,4 +8,6 @@ class AppRoutes {
   static const scoreboard = '/scoreboard';
   static const shop = '/shop';
   static const settings = '/settings';
+  static const privacyPolicy = '/privacy-policy';
+  static const termsOfService = '/terms-of-service';
 }

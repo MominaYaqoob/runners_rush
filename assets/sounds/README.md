@@ -1,18 +1,32 @@
 # Sound assets
 
-Place these files in this folder. The app falls back to the legacy name when a
-new file is missing (so older builds keep working).
+All eight primary clips below live in this folder. Missing preferred files
+resolve at runtime to the listed fallback (legacy clips stay in the repo).
 
-| Role | Preferred | Fallback (legacy) |
-|------|-----------|-------------------|
-| Menu BGM | `bgm_menu.mp3` | `bgm.mp3` |
-| Gameplay BGM | `bgm_game.mp3` | `bgm.mp3` |
-| Jump | `jump.mp3` | `jump.mp3` |
-| Coin collect | `coin.mp3` | `coin.wav` |
-| Collision / hit | `collision.mp3` | `collision.mp3` |
-| UI button tap | `button_tap.mp3` | `button_tap.mp3` |
-| Shield pickup | `shield_pickup.mp3` | `button_tap.mp3` |
-| Shield break | `shield_break.mp3` | `collision.mp3` |
+## Primary files (shipped)
 
-Do not commit large drafts here until the final clips are ready; missing preferred
-files are resolved at runtime to the fallback.
+| File | Purpose |
+|------|---------|
+| `bgm_menu.mp3` | Looping music on home / menus |
+| `bgm_game.mp3` | Looping music during gameplay |
+| `jump.mp3` | Player jump |
+| `coin.mp3` | Coin collect |
+| `button_tap.mp3` | UI button taps |
+| `collision.mp3` | Hit / game-over collision |
+| `shield_pickup.mp3` | Shield collected |
+| `shield_break.mp3` | Shield absorbs a hit |
+
+## Fallbacks (kept on purpose)
+
+| Preferred | Fallback | Notes |
+|-----------|----------|-------|
+| `bgm_menu.mp3` / `bgm_game.mp3` | `bgm.mp3` | Old single BGM track |
+| `coin.mp3` | `coin.wav` | Old coin SFX |
+| `jump.mp3` | `jump.mp3` | Self (always present once shipped) |
+| `collision.mp3` | `collision.mp3` | Self |
+| `button_tap.mp3` | `button_tap.mp3` | Self |
+| `shield_pickup.mp3` | `button_tap.mp3` | Used only if pickup clip missing |
+| `shield_break.mp3` | `collision.mp3` | Used only if break clip missing |
+
+`AudioService` picks preferred vs fallback via `resolveSoundFile` / `pickAsset`.
+Do not remove `bgm.mp3` or `coin.wav` unless you also update the service.

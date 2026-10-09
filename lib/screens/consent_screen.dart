@@ -30,73 +30,12 @@ class _ConsentScreenState extends State<ConsentScreen> {
 
   bool _agreed = false;
 
-  void _openPlaceholder(String title) {
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.55),
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Container(
-            width: 320,
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
-            decoration: BoxDecoration(
-              color: _hudFill,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: _hudBorder),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.baloo2(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Coming soon',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.baloo2(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white.withValues(alpha: 0.8),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 22,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFF8A3D), Color(0xFF6B3FA0)],
-                      ),
-                    ),
-                    child: Text(
-                      'Close',
-                      style: GoogleFonts.baloo2(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  void _openTerms() {
+    Navigator.pushNamed(context, AppRoutes.termsOfService);
+  }
+
+  void _openPrivacy() {
+    Navigator.pushNamed(context, AppRoutes.privacyPolicy);
   }
 
   Future<void> _continue() async {
@@ -173,8 +112,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
                                   alignment: PlaceholderAlignment.baseline,
                                   baseline: TextBaseline.alphabetic,
                                   child: GestureDetector(
-                                    onTap: () =>
-                                        _openPlaceholder('Terms of Service'),
+                                    onTap: _openTerms,
                                     child: Text(
                                       'Terms of Service',
                                       style: GoogleFonts.baloo2(
@@ -193,8 +131,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
                                   alignment: PlaceholderAlignment.baseline,
                                   baseline: TextBaseline.alphabetic,
                                   child: GestureDetector(
-                                    onTap: () =>
-                                        _openPlaceholder('Privacy Policy'),
+                                    onTap: _openPrivacy,
                                     child: Text(
                                       'Privacy Policy',
                                       style: GoogleFonts.baloo2(

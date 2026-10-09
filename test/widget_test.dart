@@ -13,6 +13,7 @@ import 'package:runners_rush/screens/scoreboard_screen.dart';
 import 'package:runners_rush/screens/game_over_screen.dart';
 import 'package:runners_rush/screens/gameplay_screen.dart';
 import 'package:runners_rush/screens/home_screen.dart';
+import 'package:runners_rush/screens/legal_screens.dart';
 import 'package:runners_rush/screens/onboarding_screen.dart';
 import 'package:runners_rush/services/settings_service.dart';
 import 'package:runners_rush/services/shop_service.dart';
@@ -417,6 +418,43 @@ void main() {
     expect(find.text('Gameplay Screen'), findsOneWidget);
   });
 
+  testWidgets('game over results panel fits at 640x320 without overflow',
+      (WidgetTester tester) async {
+    final errors = <FlutterErrorDetails>[];
+    final oldHandler = FlutterError.onError;
+    FlutterError.onError = (details) {
+      errors.add(details);
+      oldHandler?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = oldHandler);
+
+    tester.view.physicalSize = const Size(640, 320);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: GameOverScreen(
+          score: 99999,
+          best: 99999,
+          isNewHighScore: true,
+          coinsEarned: 50,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('GAME OVER'), findsOneWidget);
+    expect(find.textContaining('Score:'), findsOneWidget);
+    expect(
+      errors.where((e) => e.toString().contains('RenderFlex overflowed')),
+      isEmpty,
+      reason: 'no RenderFlex overflow at 640x320',
+    );
+  });
+
   testWidgets('game over home button and new high score badge', (WidgetTester tester) async {
     await setLandscape(tester);
     await tester.pumpWidget(
@@ -565,6 +603,8 @@ void main() {
         routes: {
           '/': (context) => const SettingsScreen(),
           AppRoutes.home: (context) => const Scaffold(body: Text('PLAY')),
+          AppRoutes.privacyPolicy: (context) => const PrivacyPolicyScreen(),
+          AppRoutes.termsOfService: (context) => const TermsOfServiceScreen(),
         },
       ),
     );
@@ -574,6 +614,8 @@ void main() {
     expect(find.text('Sound Effects'), findsOneWidget);
     expect(find.text('Background Music'), findsOneWidget);
     expect(find.text('Vibration'), findsOneWidget);
+    expect(find.text('Privacy Policy'), findsOneWidget);
+    expect(find.text('Terms of Service'), findsOneWidget);
     expect(find.byType(Switch), findsNWidgets(3));
 
     await tester.tap(find.text('About'));
@@ -582,6 +624,14 @@ void main() {
     await tester.tap(find.text('Close'));
     await tester.pump();
     expect(find.text('Version 1.0.0'), findsNothing);
+
+    await tester.ensureVisible(find.text('Privacy Policy'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Privacy Policy'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Last updated:'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.arrow_back_rounded));
     await tester.pumpAndSettle();
@@ -595,6 +645,8 @@ void main() {
         routes: {
           '/': (context) => const ConsentScreen(),
           AppRoutes.home: (context) => const Scaffold(body: Text('PLAY')),
+          AppRoutes.privacyPolicy: (context) => const PrivacyPolicyScreen(),
+          AppRoutes.termsOfService: (context) => const TermsOfServiceScreen(),
         },
       ),
     );
@@ -608,10 +660,12 @@ void main() {
     expect(find.text('PLAY'), findsNothing);
 
     await tester.tap(find.text('Terms of Service'));
-    await tester.pump();
-    expect(find.text('Coming soon'), findsOneWidget);
-    await tester.tap(find.text('Close'));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.text('Terms of Service'), findsWidgets);
+    expect(find.textContaining('Last updated:'), findsOneWidget);
+    expect(find.text('Coming soon'), findsNothing);
+    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byType(Checkbox));
     await tester.pump();

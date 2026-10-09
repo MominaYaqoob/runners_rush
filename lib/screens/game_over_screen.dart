@@ -203,54 +203,70 @@ class _GameOverScreenState extends State<GameOverScreen> {
                   HudStyle.space16,
                   HudStyle.space12,
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 5,
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return Align(
-                            alignment: const Alignment(-0.1, 0.2),
-                            child: SizedBox(
-                              width: constraints.maxWidth,
-                              height: constraints.maxHeight,
-                              child: Image.asset(
-                                fallAsset,
-                                key: const ValueKey('game-over-fall'),
-                                fit: BoxFit.contain,
-                                alignment: Alignment.bottomCenter,
-                                filterQuality: FilterQuality.high,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Image.asset(
-                                    'assets/images/male_fall.png',
-                                    fit: BoxFit.contain,
-                                    alignment: Alignment.bottomCenter,
-                                    filterQuality: FilterQuality.high,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.center,
+                      child: SizedBox(
+                        width: constraints.maxWidth,
+                        height: constraints.maxHeight,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: Align(
+                                alignment: const Alignment(-0.1, 0.2),
+                                child: Image.asset(
+                                  fallAsset,
+                                  key: const ValueKey('game-over-fall'),
+                                  fit: BoxFit.contain,
+                                  alignment: Alignment.bottomCenter,
+                                  filterQuality: FilterQuality.high,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Image.asset(
+                                      'assets/images/male_fall.png',
+                                      fit: BoxFit.contain,
+                                      alignment: Alignment.bottomCenter,
+                                      filterQuality: FilterQuality.high,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: HudStyle.space12),
+                            Expanded(
+                              flex: 6,
+                              child: LayoutBuilder(
+                                builder: (context, panelConstraints) {
+                                  return FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: SizedBox(
+                                      width: panelConstraints.maxWidth,
+                                      child: _ResultsPanel(
+                                        score: resolvedScore,
+                                        best: best,
+                                        coinsEarned: resolved.coinsEarned,
+                                        bonusCoins: _bonusCoins,
+                                        isNewHighScore: isNewHighScore,
+                                        doubleCoinsUsed: _doubleCoinsUsed,
+                                        onDoubleCoins: () => _watchDoubleCoins(
+                                          resolved.coinsEarned,
+                                        ),
+                                        onRestart: _goRestart,
+                                        onHome: _goHome,
+                                      ),
+                                    ),
                                   );
                                 },
                               ),
                             ),
-                          );
-                        },
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: HudStyle.space12),
-                    Expanded(
-                      flex: 6,
-                      child: _ResultsPanel(
-                        score: resolvedScore,
-                        best: best,
-                        coinsEarned: resolved.coinsEarned,
-                        bonusCoins: _bonusCoins,
-                        isNewHighScore: isNewHighScore,
-                        doubleCoinsUsed: _doubleCoinsUsed,
-                        onDoubleCoins: () =>
-                            _watchDoubleCoins(resolved.coinsEarned),
-                        onRestart: _goRestart,
-                        onHome: _goHome,
-                      ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -378,6 +394,7 @@ class _ResultsPanel extends StatelessWidget {
               child: HudPressable(
                 onPressed: onDoubleCoins,
                 child: Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 8,
@@ -386,6 +403,7 @@ class _ResultsPanel extends StatelessWidget {
                   child: Text(
                     'Watch ad: double coins (+$coinsEarned)',
                     style: HudStyle.body(size: 13, weight: FontWeight.w700),
+                    softWrap: true,
                   ),
                 ),
               ),
@@ -393,12 +411,17 @@ class _ResultsPanel extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 22),
-        Row(
-          children: [
-            _RestartButton(onPressed: onRestart),
-            const SizedBox(width: 12),
-            _HomeButton(onPressed: onHome),
-          ],
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _RestartButton(onPressed: onRestart),
+              const SizedBox(width: 12),
+              _HomeButton(onPressed: onHome),
+            ],
+          ),
         ),
       ],
     );

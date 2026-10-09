@@ -120,50 +120,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: Center(
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 560),
-                            child: ListView(
-                              children: [
-                                _ToggleRow(
-                                  icon: Icons.volume_up_rounded,
-                                  label: 'Sound Effects',
-                                  value: _soundEffects,
-                                  onChanged: (value) {
-                                    setState(() => _soundEffects = value);
-                                    AudioService.setSoundEffectsEnabled(value);
-                                  },
-                                ),
-                                const SizedBox(height: 10),
-                                _ToggleRow(
-                                  icon: Icons.music_note_rounded,
-                                  label: 'Background Music',
-                                  value: _backgroundMusic,
-                                  onChanged: (value) async {
-                                    setState(() => _backgroundMusic = value);
-                                    await AudioService.setMusicEnabled(value);
-                                  },
-                                ),
-                                const SizedBox(height: 10),
-                                _ToggleRow(
-                                  icon: Icons.vibration_rounded,
-                                  label: 'Vibration',
-                                  value: _vibration,
-                                  onChanged: (value) {
-                                    setState(() => _vibration = value);
-                                    SettingsService.setVibrationEnabled(value);
-                                  },
-                                ),
-                                const SizedBox(height: 10),
-                                if (_showPrivacyOptions) ...[
-                                  _PrivacyOptionsRow(
-                                    onTap: () {
-                                      ConsentForm.showPrivacyOptionsForm((_) {});
+                            child: SingleChildScrollView(
+                              child: Column(
+                                children: [
+                                  _ToggleRow(
+                                    icon: Icons.volume_up_rounded,
+                                    label: 'Sound Effects',
+                                    value: _soundEffects,
+                                    onChanged: (value) {
+                                      setState(() => _soundEffects = value);
+                                      AudioService.setSoundEffectsEnabled(value);
                                     },
                                   ),
                                   const SizedBox(height: 10),
+                                  _ToggleRow(
+                                    icon: Icons.music_note_rounded,
+                                    label: 'Background Music',
+                                    value: _backgroundMusic,
+                                    onChanged: (value) async {
+                                      setState(() => _backgroundMusic = value);
+                                      await AudioService.setMusicEnabled(value);
+                                    },
+                                  ),
+                                  const SizedBox(height: 10),
+                                  _ToggleRow(
+                                    icon: Icons.vibration_rounded,
+                                    label: 'Vibration',
+                                    value: _vibration,
+                                    onChanged: (value) {
+                                      setState(() => _vibration = value);
+                                      SettingsService.setVibrationEnabled(value);
+                                    },
+                                  ),
+                                  const SizedBox(height: 10),
+                                  if (_showPrivacyOptions) ...[
+                                    _PrivacyOptionsRow(
+                                      onTap: () {
+                                        ConsentForm.showPrivacyOptionsForm(
+                                          (_) {},
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 10),
+                                  ],
+                                  _AboutRow(onTap: _openAbout),
+                                  const SizedBox(height: 10),
+                                  _LinkRow(
+                                    icon: Icons.privacy_tip_outlined,
+                                    label: 'Privacy Policy',
+                                    onTap: () => Navigator.pushNamed(
+                                      context,
+                                      AppRoutes.privacyPolicy,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  _LinkRow(
+                                    icon: Icons.description_outlined,
+                                    label: 'Terms of Service',
+                                    onTap: () => Navigator.pushNamed(
+                                      context,
+                                      AppRoutes.termsOfService,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  const SettingsNativeAd(),
                                 ],
-                                _AboutRow(onTap: _openAbout),
-                                const SizedBox(height: 16),
-                                const SettingsNativeAd(),
-                              ],
+                              ),
                             ),
                           ),
                         ),
@@ -320,15 +342,36 @@ class _AboutRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _LinkRow(
+      icon: Icons.info_rounded,
+      label: 'About',
+      onTap: onTap,
+    );
+  }
+}
+
+class _LinkRow extends StatelessWidget {
+  const _LinkRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     return _SettingsCard(
       onTap: onTap,
       child: Row(
         children: [
-          const Icon(Icons.info_rounded, color: Colors.white, size: 22),
+          Icon(icon, color: Colors.white, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'About',
+              label,
               style: GoogleFonts.baloo2(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,

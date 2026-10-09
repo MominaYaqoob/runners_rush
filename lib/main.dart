@@ -8,6 +8,7 @@ import 'package:runners_rush/screens/consent_screen.dart';
 import 'package:runners_rush/screens/game_over_screen.dart';
 import 'package:runners_rush/screens/gameplay_screen.dart';
 import 'package:runners_rush/screens/home_screen.dart';
+import 'package:runners_rush/screens/legal_screens.dart';
 import 'package:runners_rush/screens/onboarding_screen.dart';
 import 'package:runners_rush/screens/scoreboard_screen.dart';
 import 'package:runners_rush/screens/settings_screen.dart';
@@ -82,6 +83,8 @@ class _RunnersRushAppState extends State<RunnersRushApp>
         AppRoutes.scoreboard: (context) => const ScoreboardScreen(),
         AppRoutes.shop: (context) => const ShopScreen(),
         AppRoutes.settings: (context) => const SettingsScreen(),
+        AppRoutes.privacyPolicy: (context) => const PrivacyPolicyScreen(),
+        AppRoutes.termsOfService: (context) => const TermsOfServiceScreen(),
       },
     );
   }
