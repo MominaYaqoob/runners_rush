@@ -4,7 +4,6 @@ import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
-import 'package:flame_audio/flame_audio.dart';
 import 'package:flutter/widgets.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/game/coin_component.dart';
@@ -31,7 +30,8 @@ class RunnersRushGame extends FlameGame
   static const minSpawnInterval = 1.0;
   /// Minimum seconds between obstacle arrivals at the player.
   static const minArrivalGap = 1.5;
-  /// Coin must arrive ≥ this many seconds from every hazard (obstacles + shields).
+  /// Coin must arrive ≥ this many seconds from ground/low obstacles and shields
+  /// (high flyers are ignored — the player runs under them on the coin line).
   static const coinHazardArrivalGap = 1.1;
   static const flyingAtLeastEvery = 4;
   /// Spawn mix: ground 55%, low flyer 20%, high flyer 25%.
@@ -44,6 +44,9 @@ class RunnersRushGame extends FlameGame
   static const coinFirstSpawnMin = 6.0;
   static const coinSpawnIntervalMin = 9.0;
   static const coinSpawnIntervalMax = 15.0;
+  /// When the arrival is unsafe, retry this often for up to [coinSpawnRetryWindow].
+  static const coinSpawnRetryInterval = 0.4;
+  static const coinSpawnRetryWindow = 6.0;
   /// Player body AABB scale used when sweeping coin collection.
   static const coinCollectInflate = 1.15;
   static const coinNearLandingSeconds = 0.12;
@@ -75,6 +78,8 @@ class RunnersRushGame extends FlameGame
   int _consecutiveFlyers = 0;
   String? _lastGroundSprite;
   String? _secondLastGroundSprite;
+  bool _coinRetrying = false;
+  double _coinRetryElapsed = 0;
 
   /// Seconds since the Flame game started. Used by later gameplay systems.
   double get elapsed => _elapsed;
@@ -111,6 +116,52 @@ class RunnersRushGame extends FlameGame
     required Rect playerBody,
   }) {
     return coinSweep.overlaps(playerBody);
+  }
+
+  /// Next [_coinTimer] limit after a spawn attempt (pure helper for tests).
+  ///
+  /// When [spawned] is true, always returns [normalInterval].
+  /// On failure: start/continue 0.4s retries until [retryElapsedBeforeAttempt]
+  /// plus one retry step reaches [coinSpawnRetryWindow], then give up.
+  static double coinTimerLimitAfterAttempt({
+    required bool spawned,
+    required bool alreadyRetrying,
+    required double retryElapsedBeforeAttempt,
+    required double normalInterval,
+  }) {
+    if (spawned) return normalInterval;
+    if (!alreadyRetrying) return coinSpawnRetryInterval;
+    final nextElapsed = retryElapsedBeforeAttempt + coinSpawnRetryInterval;
+    if (nextElapsed >= coinSpawnRetryWindow) return normalInterval;
+    return coinSpawnRetryInterval;
+  }
+
+  /// True when a ground coin must stay clear of this obstacle kind.
+  /// High flyers do not block — the player runs under them on the coin line.
+  static bool obstacleBlocksCoinSpawn({
+    required bool flying,
+    FlyingLane flyingLane = FlyingLane.high,
+  }) {
+    if (!flying) return true;
+    return flyingLane == FlyingLane.low;
+  }
+
+  /// Simulates retry attempts until [coinEta] is safe vs moving hazards.
+  /// Returns seconds from the first attempt, or null if none within the window.
+  static double? coinRetryDelayUntilSafe({
+    required double coinEta,
+    required List<double> Function(double attemptTime) hazardEtasAt,
+  }) {
+    for (var t = 0.0; t <= coinSpawnRetryWindow + 1e-9; t += coinSpawnRetryInterval) {
+      if (arrivalGapOk(
+        candidateEta: coinEta,
+        existingEtas: hazardEtasAt(t),
+        minGap: coinHazardArrivalGap,
+      )) {
+        return t;
+      }
+    }
+    return null;
   }
 
   @override
@@ -253,11 +304,10 @@ class RunnersRushGame extends FlameGame
   }
 
   Future<void> _playHitFeedback() async {
-    if (await SettingsService.getSoundEnabled() && AudioService.shouldPlay) {
-      AudioService.ensureReady();
-      try {
-        FlameAudio.play('collision.mp3').ignore();
-      } catch (_) {}
+    if (await SettingsService.getSoundEnabled()) {
+      await AudioService.onPlayerHit();
+    } else {
+      await AudioService.stopBgm(fade: false);
     }
     if (!await SettingsService.getVibrationEnabled()) return;
     final inWidgetTest = WidgetsBinding.instance.runtimeType
@@ -285,10 +335,12 @@ class RunnersRushGame extends FlameGame
   void onShieldCollected() {
     player.activateShield();
     shieldActive.value = true;
+    AudioService.playShieldPickup();
   }
 
   void onShieldConsumed() {
     shieldActive.value = false;
+    AudioService.playShieldBreak();
   }
 
   /// Clears shield HUD / player power-ups for a fresh run.
@@ -377,10 +429,12 @@ class RunnersRushGame extends FlameGame
 
   void _spawnCoin() {
     if (_isGameOver) return;
-    _coinTimer.limit = _nextCoinInterval();
 
     final speed = currentSpeed;
-    if (speed <= 0) return;
+    if (speed <= 0) {
+      _finishCoinAttempt(spawned: false, giveUp: true);
+      return;
+    }
 
     final playerX = player.position.x;
     final startX = size.x + size.y * 0.12;
@@ -390,8 +444,10 @@ class RunnersRushGame extends FlameGame
     final y = groundY - playerH * PlayerComponent.hitboxCenterYFromFeet;
     final eta = (startX - playerX) / speed;
 
-    // Skip this spawn if unsafe — do not retry until the next timer tick.
-    if (!_coinArrivalSafe(eta, playerX)) return;
+    if (!_coinArrivalSafe(eta, playerX)) {
+      _scheduleCoinRetryOrGiveUp();
+      return;
+    }
 
     world.add(
       CoinComponent(
@@ -399,12 +455,45 @@ class RunnersRushGame extends FlameGame
         spawnPosition: Vector2(startX, y),
       ),
     );
+    _finishCoinAttempt(spawned: true);
+  }
+
+  void _scheduleCoinRetryOrGiveUp() {
+    final normal = _nextCoinInterval();
+    final limit = coinTimerLimitAfterAttempt(
+      spawned: false,
+      alreadyRetrying: _coinRetrying,
+      retryElapsedBeforeAttempt: _coinRetryElapsed,
+      normalInterval: normal,
+    );
+    if (!_coinRetrying) {
+      _coinRetrying = true;
+      _coinRetryElapsed = 0;
+    } else {
+      _coinRetryElapsed += coinSpawnRetryInterval;
+      if (limit == normal) {
+        _coinRetrying = false;
+        _coinRetryElapsed = 0;
+      }
+    }
+    _coinTimer.limit = limit;
+  }
+
+  void _finishCoinAttempt({required bool spawned, bool giveUp = false}) {
+    _coinTimer.limit = coinTimerLimitAfterAttempt(
+      spawned: spawned || giveUp,
+      alreadyRetrying: _coinRetrying,
+      retryElapsedBeforeAttempt: _coinRetryElapsed,
+      normalInterval: _nextCoinInterval(),
+    );
+    _coinRetrying = false;
+    _coinRetryElapsed = 0;
   }
 
   bool _coinArrivalSafe(double candidateEta, double playerX) {
     if (!arrivalGapOk(
       candidateEta: candidateEta,
-      existingEtas: _obstacleEtas(playerX),
+      existingEtas: _coinHazardObstacleEtas(playerX),
       minGap: coinHazardArrivalGap,
     )) {
       return false;
@@ -514,6 +603,16 @@ class RunnersRushGame extends FlameGame
     return world.children.whereType<ObstacleComponent>().map(
           (o) => (o.position.x - playerX) / o.speed,
         );
+  }
+
+  /// Ground + low flyers only — high flyers do not block the ground coin line.
+  Iterable<double> _coinHazardObstacleEtas(double playerX) {
+    return world.children.whereType<ObstacleComponent>().where((o) {
+      return obstacleBlocksCoinSpawn(
+        flying: o.flying,
+        flyingLane: o.flyingLane,
+      );
+    }).map((o) => (o.position.x - playerX) / o.speed);
   }
 
   Iterable<double> _coinEtas(double playerX) {

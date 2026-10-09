@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:runners_rush/ads/ads_service.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/score_service.dart';
+import 'package:runners_rush/services/shop_service.dart';
 import 'package:runners_rush/ui/hud_style.dart';
 import 'package:runners_rush/widgets/themed_background.dart';
 
@@ -37,14 +41,58 @@ class GameOverScreen extends StatefulWidget {
 class _GameOverScreenState extends State<GameOverScreen> {
   int? _fallbackBest;
   String _character = CharacterService.male;
+  bool _doubleCoinsUsed = false;
+  int _bonusCoins = 0;
 
   @override
   void initState() {
     super.initState();
+    unawaited(AdsService.prepareInterstitialIfDue());
+    unawaited(AdsService.preloadRewarded());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _hydrateFromRoute();
     });
+  }
+
+  void _goRestart() {
+    unawaited(
+      AdsService.showInterstitialIfDue(
+        onComplete: () {
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(context, AppRoutes.gameplay);
+        },
+      ),
+    );
+  }
+
+  void _goHome() {
+    unawaited(
+      AdsService.showInterstitialIfDue(
+        onComplete: () {
+          if (!mounted) return;
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            AppRoutes.home,
+            (route) => false,
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _watchDoubleCoins(int coinsEarned) async {
+    if (_doubleCoinsUsed || coinsEarned <= 0) return;
+    final ok = await AdsService.showRewarded(
+      context: context,
+      onEarned: () async {
+        await ShopService.addCoins(coinsEarned);
+        _bonusCoins = coinsEarned;
+      },
+    );
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _doubleCoinsUsed = true);
+    }
   }
 
   Future<void> _hydrateFromRoute() async {
@@ -193,19 +241,13 @@ class _GameOverScreenState extends State<GameOverScreen> {
                         score: resolvedScore,
                         best: best,
                         coinsEarned: resolved.coinsEarned,
+                        bonusCoins: _bonusCoins,
                         isNewHighScore: isNewHighScore,
-                        onRestart: () {
-                          Navigator.pushReplacementNamed(
-                            context,
-                            AppRoutes.gameplay,
-                          );
-                        },
-                        onHome: () {
-                          Navigator.of(context).pushNamedAndRemoveUntil(
-                            AppRoutes.home,
-                            (route) => false,
-                          );
-                        },
+                        doubleCoinsUsed: _doubleCoinsUsed,
+                        onDoubleCoins: () =>
+                            _watchDoubleCoins(resolved.coinsEarned),
+                        onRestart: _goRestart,
+                        onHome: _goHome,
                       ),
                     ),
                   ],
@@ -224,7 +266,10 @@ class _ResultsPanel extends StatelessWidget {
     required this.score,
     required this.best,
     required this.coinsEarned,
+    required this.bonusCoins,
     required this.isNewHighScore,
+    required this.doubleCoinsUsed,
+    required this.onDoubleCoins,
     required this.onRestart,
     required this.onHome,
   });
@@ -232,7 +277,10 @@ class _ResultsPanel extends StatelessWidget {
   final int score;
   final int best;
   final int coinsEarned;
+  final int bonusCoins;
   final bool isNewHighScore;
+  final bool doubleCoinsUsed;
+  final VoidCallback onDoubleCoins;
   final VoidCallback onRestart;
   final VoidCallback onHome;
 
@@ -312,7 +360,7 @@ class _ResultsPanel extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                '+$coinsEarned coins',
+                '+${coinsEarned + bonusCoins} coins',
                 style: GoogleFonts.baloo2(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -321,6 +369,27 @@ class _ResultsPanel extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          Opacity(
+            opacity: doubleCoinsUsed ? 0.45 : 1,
+            child: AbsorbPointer(
+              absorbing: doubleCoinsUsed,
+              child: HudPressable(
+                onPressed: onDoubleCoins,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: HudStyle.panel(radius: 14),
+                  child: Text(
+                    'Watch ad: double coins (+$coinsEarned)',
+                    style: HudStyle.body(size: 13, weight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
         const SizedBox(height: 22),

@@ -32,8 +32,31 @@ Future<void> main() async {
   runApp(const RunnersRushApp());
 }
 
-class RunnersRushApp extends StatelessWidget {
+class RunnersRushApp extends StatefulWidget {
   const RunnersRushApp({super.key});
+
+  @override
+  State<RunnersRushApp> createState() => _RunnersRushAppState();
+}
+
+class _RunnersRushAppState extends State<RunnersRushApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    unawaited(AudioService.handleAppLifecycle(state));
+  }
 
   @override
   Widget build(BuildContext context) {

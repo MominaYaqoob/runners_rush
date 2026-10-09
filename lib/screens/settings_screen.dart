@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:runners_rush/ads/ads_service.dart';
+import 'package:runners_rush/ads/settings_native_ad.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/audio_service.dart';
 import 'package:runners_rush/services/settings_service.dart';
@@ -30,6 +33,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _soundEffects = true;
   bool _backgroundMusic = true;
   bool _vibration = true;
+  bool _showPrivacyOptions = false;
 
   @override
   void initState() {
@@ -41,11 +45,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final sound = await SettingsService.getSoundEnabled();
     final music = await SettingsService.getMusicEnabled();
     final vibration = await SettingsService.getVibrationEnabled();
+    var privacy = false;
+    if (AdsService.adsAllowed) {
+      try {
+        final status =
+            await ConsentInformation.instance.getPrivacyOptionsRequirementStatus();
+        privacy = status == PrivacyOptionsRequirementStatus.required;
+      } catch (_) {}
+    }
     if (!mounted) return;
     setState(() {
       _soundEffects = sound;
       _backgroundMusic = music;
       _vibration = vibration;
+      _showPrivacyOptions = privacy;
     });
   }
 
@@ -115,7 +128,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   value: _soundEffects,
                                   onChanged: (value) {
                                     setState(() => _soundEffects = value);
-                                    SettingsService.setSoundEnabled(value);
+                                    AudioService.setSoundEffectsEnabled(value);
                                   },
                                 ),
                                 const SizedBox(height: 10),
@@ -139,7 +152,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   },
                                 ),
                                 const SizedBox(height: 10),
+                                if (_showPrivacyOptions) ...[
+                                  _PrivacyOptionsRow(
+                                    onTap: () {
+                                      ConsentForm.showPrivacyOptionsForm((_) {});
+                                    },
+                                  ),
+                                  const SizedBox(height: 10),
+                                ],
                                 _AboutRow(onTap: _openAbout),
+                                const SizedBox(height: 16),
+                                const SettingsNativeAd(),
                               ],
                             ),
                           ),
@@ -306,6 +329,40 @@ class _AboutRow extends StatelessWidget {
           Expanded(
             child: Text(
               'About',
+              style: GoogleFonts.baloo2(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: Colors.white.withValues(alpha: 0.7),
+            size: 26,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrivacyOptionsRow extends StatelessWidget {
+  const _PrivacyOptionsRow({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          const Icon(Icons.privacy_tip_rounded, color: Colors.white, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Privacy options',
               style: GoogleFonts.baloo2(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,

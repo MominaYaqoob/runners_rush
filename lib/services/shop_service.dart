@@ -59,6 +59,8 @@ class ShopService {
   /// Credits per coin collected during a run (prices unchanged).
   /// Raise later if single ground coins need a bigger payout.
   static const inRunCoinCredit = 1;
+  /// Coins granted by the Shop "Watch ad" rewarded button.
+  static const rewardedAdCoins = 5;
   static const malePrice = 0;
   static const femalePrice = 10;
   static const eveningPrice = 0;

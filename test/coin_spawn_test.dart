@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:runners_rush/game/obstacle_component.dart';
 import 'package:runners_rush/game/player_component.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
 
@@ -10,9 +11,11 @@ void main() {
     expect(RunnersRushGame.coinSpawnIntervalMin, 9);
     expect(RunnersRushGame.coinSpawnIntervalMax, 15);
     expect(RunnersRushGame.coinHazardArrivalGap, 1.1);
+    expect(RunnersRushGame.coinSpawnRetryInterval, 0.4);
+    expect(RunnersRushGame.coinSpawnRetryWindow, 6.0);
   });
 
-  test('coin arrival must stay 1.1s from every hazard ETA', () {
+  test('coin arrival must stay 1.1s from ground/low hazards and shields', () {
     expect(
       RunnersRushGame.arrivalGapOk(
         candidateEta: 3.0,
@@ -29,7 +32,6 @@ void main() {
       ),
       isTrue,
     );
-    // Flying (faster) and ground hazards share the same ETA rule.
     expect(
       RunnersRushGame.arrivalGapOk(
         candidateEta: 2.0,
@@ -38,6 +40,101 @@ void main() {
       ),
       isFalse,
     );
+  });
+
+  test('high flyers do not block coin spawn; ground and low flyers do', () {
+    expect(
+      RunnersRushGame.obstacleBlocksCoinSpawn(flying: false),
+      isTrue,
+    );
+    expect(
+      RunnersRushGame.obstacleBlocksCoinSpawn(
+        flying: true,
+        flyingLane: FlyingLane.low,
+      ),
+      isTrue,
+    );
+    expect(
+      RunnersRushGame.obstacleBlocksCoinSpawn(
+        flying: true,
+        flyingLane: FlyingLane.high,
+      ),
+      isFalse,
+    );
+  });
+
+  test('unsafe coin schedules 0.4s retries then gives up after 6s', () {
+    const normal = 12.0;
+    // First failure starts retries.
+    expect(
+      RunnersRushGame.coinTimerLimitAfterAttempt(
+        spawned: false,
+        alreadyRetrying: false,
+        retryElapsedBeforeAttempt: 0,
+        normalInterval: normal,
+      ),
+      RunnersRushGame.coinSpawnRetryInterval,
+    );
+    // Still inside the window.
+    expect(
+      RunnersRushGame.coinTimerLimitAfterAttempt(
+        spawned: false,
+        alreadyRetrying: true,
+        retryElapsedBeforeAttempt: 5.2,
+        normalInterval: normal,
+      ),
+      RunnersRushGame.coinSpawnRetryInterval,
+    );
+    // One more step would reach the window → give up to normal interval.
+    expect(
+      RunnersRushGame.coinTimerLimitAfterAttempt(
+        spawned: false,
+        alreadyRetrying: true,
+        retryElapsedBeforeAttempt: 5.6,
+        normalInterval: normal,
+      ),
+      normal,
+    );
+  });
+
+  test('successful spawn resets to the normal 9–15s interval', () {
+    const normal = 11.0;
+    expect(
+      RunnersRushGame.coinTimerLimitAfterAttempt(
+        spawned: true,
+        alreadyRetrying: true,
+        retryElapsedBeforeAttempt: 2.4,
+        normalInterval: normal,
+      ),
+      normal,
+    );
+    expect(normal, greaterThanOrEqualTo(RunnersRushGame.coinSpawnIntervalMin));
+    expect(normal, lessThanOrEqualTo(RunnersRushGame.coinSpawnIntervalMax));
+  });
+
+  test('with an obstacle every 1.6s the coin still spawns within 6s', () {
+    // High-speed case: travel time ≈1.36s so only one ground obstacle is on
+    // screen. Arrivals every 1.6s initially block the coin ETA; retries slide
+    // the hazard past until a 1.1s gap opens (within the 6s window).
+    const coinEta = 1.36;
+    const obstaclePeriod = 1.6;
+    const firstArrival = 1.2;
+
+    final delay = RunnersRushGame.coinRetryDelayUntilSafe(
+      coinEta: coinEta,
+      hazardEtasAt: (t) {
+        final etas = <double>[];
+        for (var arrival = firstArrival; arrival < 40; arrival += obstaclePeriod) {
+          final eta = arrival - t;
+          // On-screen while still approaching within the short travel window.
+          if (eta > 0 && eta <= 1.5) etas.add(eta);
+        }
+        return etas;
+      },
+    );
+
+    expect(delay, isNotNull);
+    expect(delay!, lessThanOrEqualTo(RunnersRushGame.coinSpawnRetryWindow));
   });
 
   test('swept collection catches coin at speed 500 with dt 0.05 and 0.1', () {

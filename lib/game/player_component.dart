@@ -3,7 +3,6 @@ import 'dart:ui';
 
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
-import 'package:flame_audio/flame_audio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:runners_rush/game/coin_component.dart';
@@ -383,6 +382,11 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
     _jumpBuffer = jumpBufferSeconds;
   }
 
+  /// Drops a pending buffered jump (pause / resume / lifecycle interrupt).
+  void clearJumpBuffer() {
+    _jumpBuffer = 0;
+  }
+
   void _startJump() {
     _jumpBuffer = 0;
     _playJumpSfx();
@@ -403,11 +407,7 @@ class PlayerComponent extends SpriteAnimationGroupComponent<PlayerState>
 
   Future<void> _playJumpSfx() async {
     if (!await SettingsService.getSoundEnabled()) return;
-    if (!AudioService.shouldPlay) return;
-    AudioService.ensureReady();
-    try {
-      FlameAudio.play('jump.mp3').ignore();
-    } catch (_) {}
+    AudioService.playJump();
   }
 
   void _updateState(double dt) {

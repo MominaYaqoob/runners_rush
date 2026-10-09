@@ -173,7 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             onSound: () {
                               final next = !_soundOn;
                               setState(() => _soundOn = next);
-                              SettingsService.setSoundEnabled(next);
+                              AudioService.setSoundEffectsEnabled(next);
                             },
                           ),
                         ),

@@ -6,6 +6,15 @@ void main() {
     expect(PlayerComponent.jumpBufferSeconds, 0.15);
   });
 
+  test('tickJumpBuffer with zero remaining never starts a jump', () {
+    final next = PlayerComponent.tickJumpBuffer(
+      0,
+      1 / 60,
+      canJump: true,
+    );
+    expect(next, 0);
+  });
+
   test('tap 0.1s before landing triggers jump once grounded in jumpLand', () {
     var current = PlayerState.jumpLand;
     var isOnGround = false;

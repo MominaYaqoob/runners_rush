@@ -261,6 +261,40 @@ void main() {
     expect(find.text('PLAY'), findsOneWidget);
   });
 
+  testWidgets('app lifecycle paused shows pause menu and does not auto-resume', (
+    WidgetTester tester,
+  ) async {
+    await setLandscape(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        routes: {
+          '/': (context) => const GameplayScreen(),
+          AppRoutes.home: (context) => const Scaffold(body: Text('PLAY')),
+        },
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Paused'), findsNothing);
+
+    // paused disables frames; the pause UI paints once we return (resumed).
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    // Must show pause menu and must NOT start the 3-2-1 auto-resume.
+    expect(find.text('Paused'), findsOneWidget);
+    expect(find.text('Resume'), findsOneWidget);
+    expect(find.text('3'), findsNothing);
+
+    await tester.tap(find.text('Home'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('PLAY'), findsOneWidget);
+  });
+
   testWidgets('gameplay embeds Flame game under hud overlay', (WidgetTester tester) async {
     await setLandscape(tester);
     await tester.pumpWidget(

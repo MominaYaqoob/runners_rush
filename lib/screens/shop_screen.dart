@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:runners_rush/ads/ads_service.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/character_service.dart';
 import 'package:runners_rush/services/shop_service.dart';
@@ -30,6 +31,7 @@ class _ShopScreenState extends State<ShopScreen> {
   Set<String> _unlocked = {CharacterService.male};
   Set<String> _unlockedBackgrounds = {ShopService.eveningId};
   String? _toast;
+  bool _canWatchRewardAd = true;
 
   @override
   void initState() {
@@ -43,6 +45,7 @@ class _ShopScreenState extends State<ShopScreen> {
     final selected = await CharacterService.getSelectedCharacter();
     final unlockedBgs = await ShopService.getUnlockedBackgrounds();
     final selectedBg = await ShopService.getSelectedBackground();
+    final canReward = await AdsService.canClaimShopReward();
     if (!mounted) return;
     final unlockedSet = unlocked.toSet();
     setState(() {
@@ -52,8 +55,30 @@ class _ShopScreenState extends State<ShopScreen> {
           unlockedSet.contains(selected) ? selected : CharacterService.male;
       _unlockedBackgrounds = unlockedBgs;
       _selectedBackgroundId = selectedBg;
+      _canWatchRewardAd = canReward;
       debugPrint('[SHOP] selectedBg=$selectedBg');
     });
+  }
+
+  Future<void> _watchShopReward() async {
+    if (!_canWatchRewardAd) return;
+    final ok = await AdsService.showRewarded(
+      context: context,
+      onEarned: () async {
+        await ShopService.addCoins(ShopService.rewardedAdCoins);
+        await AdsService.recordShopRewardClaim();
+      },
+    );
+    if (!mounted) return;
+    if (ok) {
+      final coins = await ShopService.getCoins();
+      final canReward = await AdsService.canClaimShopReward();
+      if (!mounted) return;
+      setState(() {
+        _coins = coins;
+        _canWatchRewardAd = canReward;
+      });
+    }
   }
 
   void _onBack() {
@@ -149,6 +174,32 @@ class _ShopScreenState extends State<ShopScreen> {
                           constraints: const BoxConstraints(maxWidth: 720),
                           child: ListView(
                             children: [
+                              Opacity(
+                                opacity: _canWatchRewardAd ? 1 : 0.45,
+                                child: AbsorbPointer(
+                                  absorbing: !_canWatchRewardAd,
+                                  child: HudPressable(
+                                    onPressed: _watchShopReward,
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 10,
+                                      ),
+                                      decoration: HudStyle.panel(),
+                                      child: Text(
+                                        'Watch ad: +${ShopService.rewardedAdCoins} coins',
+                                        textAlign: TextAlign.center,
+                                        style: HudStyle.body(
+                                          size: 15,
+                                          weight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
                               _SectionTitle('Characters'),
                               const SizedBox(height: 8),
                               GridView.count(

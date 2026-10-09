@@ -4,9 +4,11 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:runners_rush/ads/ads_service.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/game/runners_rush_game.dart';
 import 'package:runners_rush/game/shield_painter.dart';
+import 'package:runners_rush/services/audio_service.dart';
 import 'package:runners_rush/widgets/pause_menu.dart';
 
 class GameplayScreen extends StatefulWidget {
@@ -16,7 +18,8 @@ class GameplayScreen extends StatefulWidget {
   State<GameplayScreen> createState() => _GameplayScreenState();
 }
 
-class _GameplayScreenState extends State<GameplayScreen> {
+class _GameplayScreenState extends State<GameplayScreen>
+    with WidgetsBindingObserver {
   static const _overlayStyle = SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
@@ -42,14 +45,36 @@ class _GameplayScreenState extends State<GameplayScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     SystemChrome.setSystemUIOverlayStyle(_overlayStyle);
+    AdsService.gameplayActive = true;
     _createGame();
+    unawaited(AudioService.playGameplayMusic());
+    unawaited(AdsService.prepareInterstitialIfDue());
   }
 
   @override
   void dispose() {
+    AdsService.gameplayActive = false;
+    WidgetsBinding.instance.removeObserver(this);
     _stopCountdown(notify: false);
+    unawaited(AudioService.playMenuMusic());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Interrupted by background, system dialog, or phone call — show pause
+    // menu and keep the engine paused. Do not auto-resume on return.
+    switch (state) {
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _onPause();
+      case AppLifecycleState.resumed:
+        break;
+    }
   }
 
   void _createGame() {
@@ -71,6 +96,7 @@ class _GameplayScreenState extends State<GameplayScreen> {
 
   void _onPause() {
     if (_game.isGameOver) return;
+    _clearJumpBuffer();
     final wasCounting = _isCountingDown;
     _stopCountdown(notify: false);
     if (_isPaused && !wasCounting) return;
@@ -83,12 +109,19 @@ class _GameplayScreenState extends State<GameplayScreen> {
 
   void _onResume() {
     if (!_isPaused || _game.isGameOver) return;
+    // Drop any buffered jump so countdown end cannot fire an instant jump.
+    _clearJumpBuffer();
     // Keep engine paused through the countdown.
     setState(() {
       _isPaused = false;
       _countdownIndex = 0;
     });
     _scheduleCountdownTick();
+  }
+
+  void _clearJumpBuffer() {
+    if (!_game.isLoaded) return;
+    _game.player.clearJumpBuffer();
   }
 
   void _scheduleCountdownTick() {
@@ -120,6 +153,7 @@ class _GameplayScreenState extends State<GameplayScreen> {
   void _onHome() {
     _stopCountdown(notify: false);
     _game.pauseEngine();
+    unawaited(AudioService.playMenuMusic());
     setState(() {
       _isPaused = false;
       _countdownIndex = null;

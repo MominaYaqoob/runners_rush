@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:runners_rush/ads/ads_service.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/services/onboarding_service.dart';
 
@@ -99,6 +102,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
   Future<void> _continue() async {
     if (!_agreed) return;
     await OnboardingService.markConsentAccepted();
+    unawaited(AdsService.ensureInitialized());
     if (!mounted) return;
     Navigator.pushReplacementNamed(context, AppRoutes.home);
   }

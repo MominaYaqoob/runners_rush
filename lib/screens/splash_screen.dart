@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:runners_rush/ads/ads_service.dart';
 import 'package:runners_rush/app_routes.dart';
 import 'package:runners_rush/screens/consent_screen.dart';
 import 'package:runners_rush/screens/home_screen.dart';
@@ -95,6 +96,7 @@ class _SplashScreenState extends State<SplashScreen>
     final firstLaunchDone = await OnboardingService.hasCompletedFirstLaunch();
     if (!mounted) return;
     if (firstLaunchDone) {
+      unawaited(AdsService.ensureInitialized());
       _fadeTo(
         name: AppRoutes.home,
         page: const HomeScreen(),
